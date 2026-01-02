@@ -21,7 +21,50 @@ The XybOrg factory uses a centralized deployment orchestration system (`factory_
 **Location:** Lines 231-297
 **Section:** Backend Deployment Targets
 
-#### Changes Made
+### 2. `pyproject.toml`
+
+**Location:** Line 119
+**Section:** Project Scripts
+
+#### Change Made
+
+Renamed the CLI entry point from `agent-starter-pack` to `xyborg-agent`:
+
+```toml
+[project.scripts]
+xyborg-agent = "agent_starter_pack.cli.main:cli"
+```
+
+This allows the command to be branded specifically for the XybOrg factory fork.
+
+### 3. `~/.zshrc`
+
+**Location:** Shell configuration file (user home directory)
+**Section:** Aliases (appended to end of file)
+
+#### Change Made
+
+Added shell alias to always use the local modified template:
+
+```bash
+alias xyborg-agent='uvx --from /Users/democodex/code/xyborg/scripts/factory xyborg-agent'
+```
+
+**Why this is needed:** Without the alias, `uvx xyborg-agent` would try to fetch from PyPI. The alias ensures the local fork at `/Users/democodex/code/xyborg/scripts/factory` is always used, which includes the factory deployment modifications.
+
+**To activate:** Run `source ~/.zshrc` or open a new terminal.
+
+---
+
+### Summary of File Changes
+
+| File | Lines Changed | Purpose |
+|------|---------------|---------|
+| `agent_starter_pack/base_template/Makefile` | ~67 lines (231-297) | Enable factory deployment by default |
+| `pyproject.toml` | 1 line (119) | Rename CLI command to `xyborg-agent` |
+| `~/.zshrc` | 1 line (appended) | Alias to use local modified template |
+
+#### Changes Made (Makefile)
 
 Added conditional logic that checks for `cookiecutter.settings.get("use_original_deployment")` flag:
 
@@ -40,7 +83,7 @@ Added conditional logic that checks for `cookiecutter.settings.get("use_original
 - Supports both `cloud_run` and `agent_engine` deployment targets
 - Backward compatible for agents that need the original deployment flow
 
-#### Modified Code Block
+#### Modified Code Block (Makefile)
 
 ```jinja2
 # ==============================================================================
@@ -89,8 +132,8 @@ backend: deploy
 **Factory deployment is now the default.** Simply run:
 
 ```bash
-cd /path/to/xyborg
-uvx agent-starter-pack create
+cd /path/to/xyborg/factory
+xyborg-agent create
 ```
 
 All generated agents will use factory deployment automatically.
@@ -196,12 +239,12 @@ To verify the modifications work correctly:
 
 ```bash
 # Test with factory deployment enabled
-cd /path/to/xyborg
-uvx agent-starter-pack create
+cd /path/to/xyborg/factory
+xyborg-agent create
 
 # When prompted:
 # - Select an agent template
-# - Ensure the template has use_factory_deployment: true in its config
+# - Factory deployment is now the default (no config changes needed)
 # - Check the generated Makefile has analyze/prepare/deploy/deploy-verbose targets
 
 # Test deployment
@@ -284,8 +327,8 @@ https://googlecloudplatform.github.io/agent-starter-pack/
 To create an agent with factory deployment (now the default):
 
 ```bash
-cd /path/to/xyborg
-uvx agent-starter-pack create
+cd /path/to/xyborg/factory
+xyborg-agent create
 ```
 
 That's it! Your agent will automatically use factory deployment with these targets:
@@ -294,9 +337,24 @@ That's it! Your agent will automatically use factory deployment with these targe
 - `make deploy` - Full deployment
 - `make deploy-verbose` - Verbose deployment
 
+### Setup
+
+The `xyborg-agent` command is aliased in your shell configuration (`~/.zshrc`):
+
+```bash
+alias xyborg-agent='uvx --from /Users/democodex/code/xyborg/scripts/factory xyborg-agent'
+```
+
+This ensures you're always using your locally modified template with factory deployment enabled.
+
+**Note:** The CLI entry point was renamed from `agent-starter-pack` to `xyborg-agent` in `pyproject.toml` line 119.
+
 ---
 
 **Last Updated:** 2026-01-02
-**Modified Files:** 1 (agent_starter_pack/base_template/Makefile)
-**Lines Changed:** ~67 lines (inverted conditional logic)
+**Modified Files:** 3
+- `agent_starter_pack/base_template/Makefile` (~67 lines - inverted conditional logic)
+- `pyproject.toml` (line 119 - CLI entry point renamed to `xyborg-agent`)
+- `~/.zshrc` (1 line - alias added for easy command access)
+
 **Breaking Changes:** None (100% backward compatible)

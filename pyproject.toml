@@ -116,7 +116,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-agent-starter-pack = "agent_starter_pack.cli.main:cli"
+xyborg-agent = "agent_starter_pack.cli.main:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent_starter_pack", "llm.txt"]
