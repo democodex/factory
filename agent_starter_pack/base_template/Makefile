@@ -229,10 +229,36 @@ build-inspector-if-needed:
 {%- endif %}
 
 # ==============================================================================
-# Backend Deployment Targets
+# Backend Deployment Targets{% if not cookiecutter.settings.get("use_original_deployment") %} (Delegated to Factory Deployment Agent){% endif %}
 # ==============================================================================
 
-# Deploy the agent remotely
+{% if not cookiecutter.settings.get("use_original_deployment") -%}
+# Analyze dependencies (internal common/config + external PyPI packages)
+analyze:
+	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
+	cd $$PROJECT_ROOT && \
+	uv run python -m scripts.deployment.make.factory_deployment_agent analyze {{cookiecutter.project_name}}
+
+# Prepare deployment (analyze deps, update toml with confirmation, create staging)
+prepare:
+	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
+	cd $$PROJECT_ROOT && \
+	uv run python -m scripts.deployment.make.factory_deployment_agent prepare {{cookiecutter.project_name}}
+
+# Full deployment (analyze + prepare + deploy to Vertex AI)
+deploy:
+	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
+	cd $$PROJECT_ROOT && \
+	uv run python -m scripts.deployment.make.factory_deployment_agent deploy {{cookiecutter.project_name}} --yes
+
+# Verbose deployment with detailed logging
+deploy-verbose:
+	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
+	cd $$PROJECT_ROOT && \
+	uv run python -m scripts.deployment.make.factory_deployment_agent deploy {{cookiecutter.project_name}} --yes --verbose
+
+{%- else -%}
+# Deploy the agent remotely (Original deployment method)
 {%- if cookiecutter.deployment_target == 'cloud_run' %}
 # Usage: make deploy [IAP=true] [PORT=8080] - Set IAP=true to enable Identity-Aware Proxy, PORT to specify container port
 {%- endif %}
@@ -264,6 +290,7 @@ deploy:
 		--entrypoint-module={{cookiecutter.agent_directory}}.agent_engine_app \
 		--entrypoint-object=agent_engine \
 		--requirements-file={{cookiecutter.agent_directory}}/app_utils/.requirements.txt
+{%- endif %}
 {%- endif %}
 
 # Alias for 'make deploy' for backward compatibility
