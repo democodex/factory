@@ -237,25 +237,25 @@ build-inspector-if-needed:
 analyze:
 	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
 	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.make.factory_deployment_agent analyze {{cookiecutter.project_name}}
+	uv run python -m scripts.deployment.cli analyze {{cookiecutter.project_name}}
 
 # Prepare deployment (analyze deps, update toml with confirmation, create staging)
 prepare:
 	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
 	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.make.factory_deployment_agent prepare {{cookiecutter.project_name}}
+	uv run python -m scripts.deployment.cli prepare {{cookiecutter.project_name}}
 
 # Full deployment (analyze + prepare + deploy to Vertex AI)
 deploy:
 	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
 	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.make.factory_deployment_agent deploy {{cookiecutter.project_name}} --yes
+	uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} --yes
 
 # Verbose deployment with detailed logging
 deploy-verbose:
 	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
 	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.make.factory_deployment_agent deploy {{cookiecutter.project_name}} --yes --verbose
+	uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} --yes --verbose
 
 {%- else -%}
 # Deploy the agent remotely (Original deployment method)

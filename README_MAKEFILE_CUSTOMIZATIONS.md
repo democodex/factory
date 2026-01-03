@@ -75,7 +75,7 @@ Added conditional logic that checks for `cookiecutter.settings.get("use_original
   - `prepare`: Analyzes, updates TOML, creates staging bundle
   - `deploy`: Full deployment pipeline (analyze → prepare → deploy)
   - `deploy-verbose`: Same as deploy with verbose logging
-- All targets delegate to `scripts.deployment.make.factory_deployment_agent`
+- All targets delegate to `scripts.deployment.cli`
 - Targets navigate to project root before executing
 
 **When `use_original_deployment: true`:**
@@ -95,25 +95,25 @@ Added conditional logic that checks for `cookiecutter.settings.get("use_original
 analyze:
 	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
 	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.make.factory_deployment_agent analyze {{cookiecutter.project_name}}
+	uv run python -m scripts.deployment.cli analyze {{cookiecutter.project_name}}
 
 # Prepare deployment (analyze deps, update toml with confirmation, create staging)
 prepare:
 	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
 	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.make.factory_deployment_agent prepare {{cookiecutter.project_name}}
+	uv run python -m scripts.deployment.cli prepare {{cookiecutter.project_name}}
 
 # Full deployment (analyze + prepare + deploy to Vertex AI)
 deploy:
 	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
 	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.make.factory_deployment_agent deploy {{cookiecutter.project_name}} --yes
+	uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} --yes
 
 # Verbose deployment with detailed logging
 deploy-verbose:
 	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
 	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.make.factory_deployment_agent deploy {{cookiecutter.project_name}} --yes --verbose
+	uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} --yes --verbose
 
 {%- else -%}
 # [Standard deployment logic remains unchanged]
@@ -319,6 +319,127 @@ For standard agent-starter-pack issues (without factory deployment), refer to th
 https://googlecloudplatform.github.io/agent-starter-pack/
 
 ---
+
+## Deployment Configuration Tracking
+
+### Overview
+
+The factory deployment system tracks deployment configuration in `deployment_metadata.json` by enhancing the metadata file after successful deployment.
+
+### Architecture
+
+```
+deploy.py (Google's template)
+  ↓ Writes basic metadata
+  {
+    "remote_agent_engine_id": "...",
+    "deployment_target": "agent_engine",
+    "is_a2a": false,
+    "deployment_timestamp": "..."
+  }
+
+factory_deployment_agent.py
+  ↓ Enhances with factory config
+  {
+    ... (original metadata) ...,
+    "factory_deployment": {
+      "deployed_by": "factory_deployment_agent",
+      "version": "1.0",
+      "config": { ... },
+      "dependencies": { ... },
+      "environment": { ... },
+      "staging": { ... }
+    }
+  }
+```
+
+### Enhanced Metadata Structure
+
+**`factory_deployment.config`** - Deployment resource configuration:
+- `display_name`: Agent display name
+- `description`: Agent description
+- `cpu`: CPU limit (e.g., "4")
+- `memory`: Memory limit (e.g., "8Gi")
+- `min_instances`: Minimum instances
+- `max_instances`: Maximum instances
+- `container_concurrency`: Container concurrency setting
+- `num_workers`: Number of worker processes
+- `labels`: Key-value labels applied to agent
+
+**`factory_deployment.dependencies`** - Dependency tracking:
+- `internal_modules`: Count of internal modules bundled
+- `internal_packages`: List of internal packages (common, config)
+- `external_packages`: Count of external PyPI packages
+
+**`factory_deployment.environment`** - Environment variable tracking:
+- `variables_passed`: Count of env vars passed
+- `variable_keys`: List of env var names (not values, for security)
+
+**`factory_deployment.staging`** - Staging information:
+- `location`: Path to staging directory
+- `bundle_created`: Whether staging bundle was successfully created
+
+### Example Enhanced Metadata
+
+```json
+{
+  "remote_agent_engine_id": "projects/1043474131598/locations/us-central1/reasoningEngines/6944701258498310144",
+  "deployment_target": "agent_engine",
+  "is_a2a": false,
+  "deployment_timestamp": "2026-01-02T16:30:45.123456",
+  "factory_deployment": {
+    "deployed_by": "factory_deployment_agent",
+    "version": "1.0",
+    "config": {
+      "display_name": "sales",
+      "description": "Factory-deployed sales agent",
+      "cpu": "4",
+      "memory": "8Gi",
+      "min_instances": 1,
+      "max_instances": 10,
+      "container_concurrency": 9,
+      "num_workers": 1,
+      "labels": {
+        "managed_by": "factory",
+        "agent": "sales"
+      }
+    },
+    "dependencies": {
+      "internal_modules": 11,
+      "internal_packages": ["common"],
+      "external_packages": 12
+    },
+    "environment": {
+      "variables_passed": 8,
+      "variable_keys": [
+        "HUBSPOT_ACCESS_TOKEN",
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_CLOUD_REGION"
+      ]
+    },
+    "staging": {
+      "location": "/path/to/staging/sales",
+      "bundle_created": true
+    }
+  }
+}
+```
+
+### Benefits
+
+1. **Audit Trail**: Track what configuration was used for each deployment
+2. **Reproducibility**: Know exactly how an agent was deployed
+3. **Debugging**: See what dependencies and env vars were included
+4. **Configuration Drift Detection**: Compare current vs. previous deployments
+5. **Team Visibility**: Everyone can see deployment settings
+
+### Implementation Details
+
+- **Method**: `factory_deployment_agent._enhance_deployment_metadata()`
+- **File**: `scripts/deployment/make/factory_deployment_agent.py`
+- **Called**: After successful deployment
+- **Template Changes**: None required - `deploy.py` template remains unchanged
+- **Compatibility**: Direct `deploy.py` calls still work (without enhancement)
 
 ---
 
