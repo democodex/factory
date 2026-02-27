@@ -343,10 +343,12 @@ data-ingestion:
 # Testing & Code Quality
 # ==============================================================================
 
-# Run unit and integration tests
+# Run unit and integration tests (with project root in PYTHONPATH for config.secrets)
 test:
 	uv sync --dev
-	uv run pytest tests/unit && uv run pytest tests/integration
+	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
+	PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run pytest tests/unit && \
+	PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run pytest tests/integration
 
 # Run code quality checks (codespell, ruff, ty)
 lint:
