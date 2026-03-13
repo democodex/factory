@@ -9,34 +9,34 @@ settings:
   frontend_type: "None"
   commands:
     override:
-      deploy: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} {{cookiecutter.agent_directory}} --yes"
+      deploy: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && AGENT_DIR=$$(awk -F'\"' '/^agent_directory =/{print $$2}' pyproject.toml) && PROJECT_NAME=$$(awk -F'\"' '/^name =/{print $$2}' pyproject.toml) && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli deploy $$PROJECT_NAME $$AGENT_DIR --yes"
       playground: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run adk web . --port 8501 --reload_agents"
       test: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run pytest tests/unit && PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run pytest tests/integration"
     extra:
       run:
         description: "Run agent locally via adk"
-        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run adk run {{cookiecutter.agent_directory}}"
+        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && AGENT_DIR=$$(awk -F'\"' '/^agent_directory =/{print $$2}' pyproject.toml) && PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run adk run $$AGENT_DIR"
       analyze:
         description: "Analyze dependencies (internal common/config + external PyPI packages)"
-        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli analyze {{cookiecutter.project_name}} {{cookiecutter.agent_directory}}"
+        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && AGENT_DIR=$$(awk -F'\"' '/^agent_directory =/{print $$2}' pyproject.toml) && PROJECT_NAME=$$(awk -F'\"' '/^name =/{print $$2}' pyproject.toml) && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli analyze $$PROJECT_NAME $$AGENT_DIR"
       prepare:
         description: "Prepare deployment (analyze deps, update toml, create staging)"
-        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli prepare {{cookiecutter.project_name}} {{cookiecutter.agent_directory}}"
+        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && AGENT_DIR=$$(awk -F'\"' '/^agent_directory =/{print $$2}' pyproject.toml) && PROJECT_NAME=$$(awk -F'\"' '/^name =/{print $$2}' pyproject.toml) && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli prepare $$PROJECT_NAME $$AGENT_DIR"
       deploy-verbose:
         description: "Full deployment with detailed logging"
-        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} {{cookiecutter.agent_directory}} --yes --verbose"
+        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && AGENT_DIR=$$(awk -F'\"' '/^agent_directory =/{print $$2}' pyproject.toml) && PROJECT_NAME=$$(awk -F'\"' '/^name =/{print $$2}' pyproject.toml) && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli deploy $$PROJECT_NAME $$AGENT_DIR --yes --verbose"
       logs:
         description: "Fetch recent logs from deployed agent"
-        command: "@PROJECT_ID=$$(gcloud config get-value project) && gcloud logging read 'resource.labels.service_name=\"{{cookiecutter.project_name}}\"' --project=$$PROJECT_ID --limit=50 --format='table(timestamp,jsonPayload.message)' --freshness=1h"
+        command: "@PROJECT_NAME=$$(awk -F'\"' '/^name =/{print $$2}' pyproject.toml) && PROJECT_ID=$$(gcloud config get-value project) && gcloud logging read \"resource.labels.service_name=\\\"$$PROJECT_NAME\\\"\" --project=$$PROJECT_ID --limit=50 --format='table(timestamp,jsonPayload.message)' --freshness=1h"
       logs-stream:
         description: "Stream live logs from deployed agent"
-        command: "@PROJECT_ID=$$(gcloud config get-value project) && gcloud alpha logging tail 'resource.labels.service_name=\"{{cookiecutter.project_name}}\"' --project=$$PROJECT_ID --format='table(timestamp,jsonPayload.message)'"
+        command: "@PROJECT_NAME=$$(awk -F'\"' '/^name =/{print $$2}' pyproject.toml) && PROJECT_ID=$$(gcloud config get-value project) && gcloud alpha logging tail \"resource.labels.service_name=\\\"$$PROJECT_NAME\\\"\" --project=$$PROJECT_ID --format='table(timestamp,jsonPayload.message)'"
       status:
         description: "Show deployment status"
         command: "@cat deployment_metadata.json 2>/dev/null && echo '' || echo 'No deployment metadata. Run make deploy first.'"
       clean:
         description: "Clean staging and cache artifacts"
-        command: "rm -rf __pycache__ .pytest_cache .mypy_cache .ty .coverage htmlcov {{cookiecutter.agent_directory}}/app_utils/.requirements.txt && echo 'Cleaned.'"
+        command: "@AGENT_DIR=$$(awk -F'\"' '/^agent_directory =/{print $$2}' pyproject.toml) && rm -rf __pycache__ .pytest_cache .mypy_cache .ty .coverage htmlcov $$AGENT_DIR/app_utils/.requirements.txt && echo 'Cleaned.'"
       export-requirements:
         description: "Export requirements without deploying"
-        command: "(uv export --no-hashes --no-header --no-dev --no-emit-project --no-annotate > {{cookiecutter.agent_directory}}/app_utils/.requirements.txt 2>/dev/null || uv export --no-hashes --no-header --no-dev --no-emit-project > {{cookiecutter.agent_directory}}/app_utils/.requirements.txt) && echo 'Requirements exported.'"
+        command: "@AGENT_DIR=$$(awk -F'\"' '/^agent_directory =/{print $$2}' pyproject.toml) && (uv export --no-hashes --no-header --no-dev --no-emit-project --no-annotate > $$AGENT_DIR/app_utils/.requirements.txt 2>/dev/null || uv export --no-hashes --no-header --no-dev --no-emit-project > $$AGENT_DIR/app_utils/.requirements.txt) && echo 'Requirements exported.'"
