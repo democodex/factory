@@ -60,133 +60,43 @@ alias xyborg-agent='uvx --from /Users/democodex/code/xyborg/scripts/factory xybo
 
 | File | Lines Changed | Purpose |
 |------|---------------|---------|
-| `agent_starter_pack/base_template/Makefile` | ~67 lines (231-297) | Enable factory deployment by default |
+| `agent_starter_pack/base_template/Makefile` | ~4 lines | Added `commands.override.deploy` conditional (matching existing install/playground pattern) |
 | `pyproject.toml` | 1 line (119) | Rename CLI command to `xyborg-agent` |
 | `~/.zshrc` | 1 line (appended) | Alias to use local modified template |
+| `agents/xyborg_base/` | New template | XybOrg factory agent template |
+| `agents/xyborg_a2a_base/` | New template | XybOrg factory agent with A2A template |
 
 #### Changes Made (Makefile)
 
-Added conditional logic that checks for `cookiecutter.settings.get("use_original_deployment")` flag:
-
-**DEFAULT (when `use_original_deployment` is not set or false):**
-- Uses factory deployment agent (the new default)
-- Includes four Make targets:
-  - `analyze`: Analyzes dependencies only
-  - `prepare`: Analyzes, updates TOML, creates staging bundle
-  - `deploy`: Full deployment pipeline (analyze → prepare → deploy)
-  - `deploy-verbose`: Same as deploy with verbose logging
-- All targets delegate to `scripts.deployment.cli`
-- Targets navigate to project root before executing
-
-**When `use_original_deployment: true`:**
-- Uses standard agent-starter-pack deployment (original behavior)
-- Supports both `cloud_run` and `agent_engine` deployment targets
-- Backward compatible for agents that need the original deployment flow
-
-#### Modified Code Block (Makefile)
+Added a `commands.override.deploy` conditional to the deploy target, matching the existing `commands.override.install` and `commands.override.playground` patterns already in the Makefile:
 
 ```jinja2
-# ==============================================================================
-# Backend Deployment Targets{% if not cookiecutter.settings.get("use_original_deployment") %} (Delegated to Factory Deployment Agent){% endif %}
-# ==============================================================================
-
-{% if not cookiecutter.settings.get("use_original_deployment") -%}
-# Analyze dependencies (internal common/config + external PyPI packages)
-analyze:
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.cli analyze {{cookiecutter.project_name}}
-
-# Prepare deployment (analyze deps, update toml with confirmation, create staging)
-prepare:
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.cli prepare {{cookiecutter.project_name}}
-
-# Full deployment (analyze + prepare + deploy to Vertex AI)
+{%- if cookiecutter.settings.get("commands", {}).get("override", {}).get("deploy") %}
 deploy:
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} --yes
-
-# Verbose deployment with detailed logging
-deploy-verbose:
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} --yes --verbose
-
-{%- else -%}
+	{{cookiecutter.settings.get("commands", {}).get("override", {}).get("deploy")}}
+{%- else %}
 # [Standard deployment logic remains unchanged]
 {%- endif %}
-
-# Alias for 'make deploy' for backward compatibility
-backend: deploy
 ```
 
----
+Factory deployment targets (`analyze`, `prepare`, `deploy-verbose`) are injected via `commands.extra` in template configs. The `deploy` target is overridden via `commands.override.deploy`. This keeps factory-specific logic entirely in the custom templates.
 
-## How to Use
-
-### Factory Deployment (DEFAULT)
-
-**Factory deployment is now the default.** Simply run:
-
-```bash
-cd /path/to/xyborg/factory
-xyborg-agent create
-```
-
-All generated agents will use factory deployment automatically.
-
-### Original Deployment (Opt-in)
-
-If you need the original agent-starter-pack deployment for a specific agent, add this to `.template/templateconfig.yaml`:
-
-```yaml
-name: "your-agent"
-description: "Your agent description"
-example_question: "What can you help me with?"
-
-settings:
-  deployment_targets:
-    - agent_engine
-  agent_directory: "app"
-  use_original_deployment: true  # ← Use original deployment instead of factory
-
-tags:
-  - adk
-```
-
-### Generated Makefile Targets
-
-**Default (Factory Deployment):**
+### Generated Makefile Targets (XybOrg Templates)
 
 ```makefile
-# Analyze dependencies
-make analyze
-
-# Prepare deployment bundle
-make prepare
-
-# Full deployment
+# Factory deployment (via commands.override.deploy)
 make deploy
 
-# Verbose deployment
-make deploy-verbose
+# Factory extras (via commands.extra)
+make analyze          # Analyze dependencies
+make prepare          # Prepare deployment bundle
+make deploy-verbose   # Verbose deployment
 
 # Backward compatibility alias
 make backend
 ```
 
-**With `use_original_deployment: true`:**
-
-```makefile
-# Standard deployment (exports deps, runs deploy.py)
-make deploy
-
-# Backward compatibility alias
-make backend
-```
+Templates that don't use `commands.override.deploy` get the standard ADK deployment unchanged.
 
 ---
 
@@ -256,19 +166,65 @@ make deploy     # Should run full deployment pipeline
 
 ---
 
-## Rollback Plan
+---
 
-If issues arise, you can revert by:
+## XybOrg Custom Agent Templates
 
-1. Restore the original Makefile template from git:
-   ```bash
-   cd scripts/factory
-   git checkout HEAD -- agent_starter_pack/base_template/Makefile
-   ```
+Two custom templates auto-discovered by `xyborg-agent create`:
 
-2. Remove the `use_factory_deployment` flag from agent templates
+### `xyborg_base` — Standard XybOrg Agent
 
-3. Existing deployed agents continue working unchanged
+Production-ready agent with secrets, plugins, sessions, and background tasks.
+
+**Generated files:**
+
+| File | Purpose |
+|------|---------|
+| `agent.py` | Clean orchestrator — delegates to config/plugins/prompts modules |
+| `config.py` | Loads `config.secrets` (`.env` + Google Secret Manager), `DEFAULT_MODEL` with fallback hierarchy |
+| `plugins.py` | `EventPlugin` + optional `SlackNotificationPlugin` (env-configurable) |
+| `prompts.py` | Agent instruction text — customize for your domain |
+| `tools/__init__.py` | Empty scaffold for agent-specific tools |
+| `sub_agents/__init__.py` | Empty scaffold for sub-agents |
+
+Plus `agent_engine_app.py`, `app_utils/deploy.py`, `app_utils/telemetry.py` from deployment overlay.
+
+### `xyborg_a2a_base` — XybOrg Agent with A2A Protocol
+
+Same as `xyborg_base` plus A2A SDK dependencies (`a2a-sdk`, `nest-asyncio`). A2A protocol handling is in the deployment overlay's `agent_engine_app.py`.
+
+### Customization After Creation
+
+- **Slack channels**: Set `SLACK_SUCCESS_CHANNEL` / `SLACK_ERROR_CHANNEL` env vars, or edit `plugins.py`
+- **Disable Slack**: Set `ENABLE_SLACK_PLUGIN=false` env var
+- **Model**: Set `DEFAULT_MODEL` or `MODEL` env var
+- **Prompts**: Edit `prompts.py` with domain-specific instructions
+- **Notifications**: Uncomment `register_behavior()` in `agent.py` for task-type notifications
+- **Tools**: Add domain tools in `tools/` directory, import in `agent.py`
+- **Sub-agents**: Add sub-agents in `sub_agents/` directory
+
+---
+
+## Custom Makefile Targets
+
+Templates inject targets via `templateconfig.yaml` using two mechanisms:
+
+- **`commands.override.deploy`** — Overrides the base `deploy` target with factory deployment
+- **`commands.extra`** — Adds new targets under "Agent-Specific Commands" section
+
+| Target | Mechanism | Description |
+|--------|-----------|-------------|
+| `make deploy` | `override` | Factory deployment (analyze + prepare + deploy to Vertex AI) |
+| `make analyze` | `extra` | Analyze internal/external dependencies only |
+| `make prepare` | `extra` | Analyze deps, update toml, create staging bundle |
+| `make deploy-verbose` | `extra` | Full deployment with detailed logging |
+| `make logs` | `extra` | Fetch recent 50 logs via `gcloud logging read` |
+| `make logs-stream` | `extra` | Stream live logs via `gcloud alpha logging tail` |
+| `make status` | `extra` | Show `deployment_metadata.json` contents |
+| `make clean` | `extra` | Remove caches, staging dir, exported requirements |
+| `make export-requirements` | `extra` | Export deps to `.requirements.txt` without deploying |
+
+These targets are only available to agents created from `xyborg_base` / `xyborg_a2a_base` templates.
 
 ---
 
@@ -276,12 +232,10 @@ If issues arise, you can revert by:
 
 Potential improvements to consider:
 
-1. **Add `make status`**: Check deployment status and show current version
-2. **Add `make rollback`**: Rollback to previous deployment
-3. **Add `make logs`**: Stream logs from deployed agent
-4. **Add `make test-remote`**: Run integration tests against deployed agent
-5. **Environment-specific deployments**: Support dev/staging/prod environments
-6. **Dry-run mode**: Preview deployment changes without executing
+1. **Add `make rollback`**: Rollback to previous deployment
+2. **Add `make test-remote`**: Run integration tests against deployed agent
+3. **Environment-specific deployments**: Support dev/staging/prod environments
+4. **Dry-run mode**: Preview deployment changes without executing
 
 ---
 
@@ -291,17 +245,16 @@ Potential improvements to consider:
 
 If you pull upstream changes from agent-starter-pack:
 
-1. Check if `base_template/Makefile` has conflicts
-2. Ensure the conditional logic around lines 231-297 is preserved
-3. Test with both `use_factory_deployment: true` and `false`
-4. Update this document if new deployment features are added
+1. Check if `base_template/Makefile` has conflicts in the deploy target's `commands.override.deploy` conditional
+2. Custom templates in `agents/xyborg_base/` and `agents/xyborg_a2a_base/` are safe — upstream doesn't touch them
+3. Update this document if new deployment features are added
 
 ### Adding New Factory Targets
 
-To add new deployment targets (e.g., `make validate`):
+To add new targets to XybOrg templates:
 
-1. Add the target inside the `{% if cookiecutter.settings.get("use_factory_deployment") -%}` block
-2. Follow the same pattern: navigate to project root, call factory_deployment_agent
+1. Add to `commands.extra` in the template's `templateconfig.yaml`
+2. To override an existing base target, add to `commands.override` instead
 3. Update this document with the new target
 
 ---
@@ -310,10 +263,9 @@ To add new deployment targets (e.g., `make validate`):
 
 If you encounter problems with these customizations:
 
-1. Check that `use_factory_deployment: true` is set in your template config
-2. Verify `scripts/deployment/make/factory_deployment_agent.py` exists and is executable
-3. Ensure you're running from within a git repository (for `git rev-parse --show-toplevel`)
-4. Check the factory deployment agent logs for detailed error messages
+1. Verify `scripts/deployment/cli` module exists and is executable
+2. Ensure you're running from within a git repository (for `git rev-parse --show-toplevel`)
+3. Check the factory deployment agent logs for detailed error messages
 
 For standard agent-starter-pack issues (without factory deployment), refer to the official documentation:
 https://googlecloudplatform.github.io/agent-starter-pack/
@@ -472,10 +424,12 @@ This ensures you're always using your locally modified template with factory dep
 
 ---
 
-**Last Updated:** 2026-01-02
-**Modified Files:** 3
+**Last Updated:** 2026-03-12
+**Modified Files:** 3 (core) + 2 custom templates
 - `agent_starter_pack/base_template/Makefile` (~67 lines - inverted conditional logic)
 - `pyproject.toml` (line 119 - CLI entry point renamed to `xyborg-agent`)
 - `~/.zshrc` (1 line - alias added for easy command access)
+- `agent_starter_pack/agents/xyborg_base/` (custom template - standard XybOrg agent)
+- `agent_starter_pack/agents/xyborg_a2a_base/` (custom template - XybOrg agent with A2A)
 
 **Breaking Changes:** None (100% backward compatible)

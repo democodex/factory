@@ -1,0 +1,37 @@
+description: "XybOrg factory agent with A2A protocol, secrets, plugins, sessions, and background tasks"
+example_question: "What can you help me with?"
+settings:
+  requires_data_ingestion: false
+  requires_session: true
+  deployment_targets: ["agent_engine"]
+  extra_dependencies: ["google-adk>=1.16.0,<2.0.0", "a2a-sdk~=0.3.9", "nest-asyncio>=1.6.0,<2.0.0"]
+  tags: ["adk", "a2a"]
+  frontend_type: "None"
+  commands:
+    override:
+      deploy: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} {{cookiecutter.agent_directory}} --yes"
+    extra:
+      analyze:
+        description: "Analyze dependencies (internal common/config + external PyPI packages)"
+        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli analyze {{cookiecutter.project_name}} {{cookiecutter.agent_directory}}"
+      prepare:
+        description: "Prepare deployment (analyze deps, update toml, create staging)"
+        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli prepare {{cookiecutter.project_name}} {{cookiecutter.agent_directory}}"
+      deploy-verbose:
+        description: "Full deployment with detailed logging"
+        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} {{cookiecutter.agent_directory}} --yes --verbose"
+      logs:
+        description: "Fetch recent logs from deployed agent"
+        command: "@PROJECT_ID=$$(gcloud config get-value project) && gcloud logging read 'resource.labels.service_name=\"{{cookiecutter.project_name}}\"' --project=$$PROJECT_ID --limit=50 --format='table(timestamp,jsonPayload.message)' --freshness=1h"
+      logs-stream:
+        description: "Stream live logs from deployed agent"
+        command: "@PROJECT_ID=$$(gcloud config get-value project) && gcloud alpha logging tail 'resource.labels.service_name=\"{{cookiecutter.project_name}}\"' --project=$$PROJECT_ID --format='table(timestamp,jsonPayload.message)'"
+      status:
+        description: "Show deployment status"
+        command: "@cat deployment_metadata.json 2>/dev/null && echo '' || echo 'No deployment metadata. Run make deploy first.'"
+      clean:
+        description: "Clean staging and cache artifacts"
+        command: "rm -rf __pycache__ .pytest_cache .mypy_cache .ty .coverage htmlcov {{cookiecutter.agent_directory}}/app_utils/.requirements.txt && echo 'Cleaned.'"
+      export-requirements:
+        description: "Export requirements without deploying"
+        command: "(uv export --no-hashes --no-header --no-dev --no-emit-project --no-annotate > {{cookiecutter.agent_directory}}/app_utils/.requirements.txt 2>/dev/null || uv export --no-hashes --no-header --no-dev --no-emit-project > {{cookiecutter.agent_directory}}/app_utils/.requirements.txt) && echo 'Requirements exported.'"

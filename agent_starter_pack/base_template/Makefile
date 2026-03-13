@@ -236,36 +236,14 @@ build-inspector-if-needed:
 {%- endif %}
 
 # ==============================================================================
-# Backend Deployment Targets{% if not cookiecutter.settings.get("use_original_deployment") %} (Delegated to Factory Deployment Agent){% endif %}
+# Backend Deployment Targets
 # ==============================================================================
 
-{% if not cookiecutter.settings.get("use_original_deployment") -%}
-# Analyze dependencies (internal common/config + external PyPI packages)
-analyze:
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.cli analyze {{cookiecutter.project_name}} {{cookiecutter.agent_directory}}
-
-# Prepare deployment (analyze deps, update toml with confirmation, create staging)
-prepare:
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.cli prepare {{cookiecutter.project_name}} {{cookiecutter.agent_directory}}
-
-# Full deployment (analyze + prepare + deploy to Vertex AI)
+# Deploy the agent remotely
+{%- if cookiecutter.settings.get("commands", {}).get("override", {}).get("deploy") %}
 deploy:
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} {{cookiecutter.agent_directory}} --yes
-
-# Verbose deployment with detailed logging
-deploy-verbose:
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	cd $$PROJECT_ROOT && \
-	uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} {{cookiecutter.agent_directory}} --yes --verbose
-
-{%- else -%}
-# Deploy the agent remotely (Original deployment method)
+	{{cookiecutter.settings.get("commands", {}).get("override", {}).get("deploy")}}
+{%- else %}
 {%- if cookiecutter.deployment_target == 'cloud_run' %}
 # Usage: make deploy [IAP=true] [PORT=8080] - Set IAP=true to enable Identity-Aware Proxy, PORT to specify container port
 {%- endif %}
