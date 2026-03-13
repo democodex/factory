@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +30,11 @@ from packaging import version
 from rich.console import Console
 
 from agent_starter_pack.cli.utils.command import run_gcloud_command
+from agent_starter_pack.cli.utils.gcp import (
+    get_user_agent,
+    get_x_goog_api_client_header,
+)
+from agent_starter_pack.cli.utils.logging import display_welcome_banner
 
 # TOML parser - use standard library for Python 3.11+, fallback to tomli
 if sys.version_info >= (3, 11):
@@ -298,6 +303,32 @@ def get_access_token() -> str:
         raise RuntimeError("Failed to get access token") from e
 
 
+def _build_api_headers(
+    access_token: str,
+    project_id: str,
+    content_type: bool = False,
+) -> dict[str, str]:
+    """Build headers for Discovery Engine API requests with user-agent.
+
+    Args:
+        access_token: Google Cloud access token
+        project_id: GCP project ID or number for billing
+        content_type: Whether to include Content-Type header (for POST/PATCH)
+
+    Returns:
+        Headers dictionary
+    """
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "x-goog-user-project": project_id,
+        "User-Agent": get_user_agent(),
+        "x-goog-api-client": get_x_goog_api_client_header(),
+    }
+    if content_type:
+        headers["Content-Type"] = "application/json"
+    return headers
+
+
 def get_identity_token() -> str:
     """Get Google Cloud identity token.
 
@@ -352,13 +383,13 @@ def fetch_agent_card_from_url(url: str, deployment_target: str) -> dict | None:
         if deployment_target == "agent_engine":
             access_token = get_access_token()
             headers["Authorization"] = f"Bearer {access_token}"
-        elif deployment_target == "cloud_run":
+        elif deployment_target in ("cloud_run", "gke"):
             identity_token = get_identity_token()
             headers["Authorization"] = f"Bearer {identity_token}"
         else:
             raise ValueError(
                 f"Unknown deployment target: {deployment_target}. "
-                f"Expected 'agent_engine' or 'cloud_run'"
+                f"Expected 'agent_engine', 'cloud_run', or 'gke'"
             )
 
         response = requests.get(url, headers=headers, timeout=10)
@@ -604,10 +635,7 @@ def list_gemini_enterprise_apps(
             f"{base_endpoint}/v1alpha/projects/{project_number}/"
             f"locations/{location}/collections/default_collection/engines"
         )
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "x-goog-user-project": project_number,
-        }
+        headers = _build_api_headers(access_token, project_number)
 
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
@@ -937,11 +965,7 @@ def register_a2a_agent(
         f"locations/{as_location}/collections/{collection}/engines/{engine_id}/"
         "assistants/default_assistant/agents"
     )
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "x-goog-user-project": project_id,
-    }
+    headers = _build_api_headers(access_token, project_id, content_type=True)
 
     # Build payload with A2A agent definition
     payload = {
@@ -1106,11 +1130,7 @@ def register_agent(
     )
 
     # Request headers
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-        "x-goog-user-project": project_id,
-    }
+    headers = _build_api_headers(access_token, project_id, content_type=True)
 
     # Request body
     payload: dict = {
@@ -1290,8 +1310,8 @@ def register_agent(
 @click.option(
     "--deployment-target",
     envvar="DEPLOYMENT_TARGET",
-    type=click.Choice(["agent_engine", "cloud_run"], case_sensitive=False),
-    help="Deployment target (agent_engine or cloud_run).",
+    type=click.Choice(["agent_engine", "cloud_run", "gke"], case_sensitive=False),
+    help="Deployment target (agent_engine, cloud_run, or gke).",
 )
 @click.option(
     "--project-number",
@@ -1335,7 +1355,7 @@ def register_gemini_enterprise(
     This command can run interactively or accept all parameters via command-line options.
     If key parameters are missing, it will prompt the user for input.
     """
-    console.print("\n🤖 Agent → Gemini Enterprise Registration\n")
+    display_welcome_banner(register_mode=True, quiet=yes)
 
     # Read metadata file once to determine agent type and deployment target
     metadata = None

@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 import os
 import pathlib
+import shutil
 from datetime import datetime
 
 import pytest
@@ -24,6 +25,27 @@ from tests.utils.get_agents import get_test_combinations_to_run
 
 console = Console()
 TARGET_DIR = "target"
+
+# Language runtime requirements for each agent type
+AGENT_RUNTIME_REQUIREMENTS: dict[str, tuple[str, str]] = {
+    # agent_suffix: (command_to_check, display_name)
+    "_go": ("go", "Go"),
+    "_java": ("mvn", "Maven"),
+    "_ts": ("node", "Node.js"),
+}
+
+
+def check_runtime_available(agent: str) -> tuple[bool, str]:
+    """Check if the required runtime for an agent is available.
+
+    Returns:
+        Tuple of (is_available, skip_reason)
+    """
+    for suffix, (command, display_name) in AGENT_RUNTIME_REQUIREMENTS.items():
+        if agent.endswith(suffix):
+            if shutil.which(command) is None:
+                return False, f"{display_name} ({command}) not installed"
+    return True, ""
 
 
 def _run_agent_test(
@@ -66,62 +88,91 @@ def _run_agent_test(
             "Templating project",
         )
 
-        # Determine agent directory from extra_params
-        agent_directory = "app"  # default
-        if extra_params:
-            # Check for -dir or --agent-directory parameter
-            for i, param in enumerate(extra_params):
-                if param in ["-dir", "--agent-directory"] and i + 1 < len(extra_params):
-                    agent_directory = extra_params[i + 1]
-                    break
+        # Detect language based on generated files
+        is_go = (project_path / "go.mod").exists()
+        is_java = (project_path / "pom.xml").exists()
+        is_ts = (project_path / "package.json").exists() and not (
+            project_path / "pyproject.toml"
+        ).exists()
 
-        # Verify essential files
-        essential_files = [
-            "pyproject.toml",
-            f"{agent_directory}/agent.py",
-        ]
+        # Verify essential files based on language
+        if is_go:
+            essential_files = ["go.mod", "main.go", "agent/agent.go", "Makefile"]
+        elif is_java:
+            # Find the Java package directory dynamically
+            java_src = project_path / "src" / "main" / "java"
+            java_packages = list(java_src.iterdir()) if java_src.exists() else []
+            if java_packages:
+                package_dir = java_packages[0].name
+                essential_files = [
+                    "pom.xml",
+                    f"src/main/java/{package_dir}/Main.java",
+                    f"src/main/java/{package_dir}/Agent.java",
+                    "Makefile",
+                ]
+            else:
+                essential_files = ["pom.xml", "Makefile"]
+        elif is_ts:
+            # Determine agent directory from extra_params
+            agent_directory = "app"  # default
+            if extra_params:
+                for i, param in enumerate(extra_params):
+                    if param in ["-dir", "--agent-directory"] and i + 1 < len(
+                        extra_params
+                    ):
+                        agent_directory = extra_params[i + 1]
+                        break
+            essential_files = [
+                "package.json",
+                "tsconfig.json",
+                f"{agent_directory}/agent.ts",
+                "Makefile",
+            ]
+        else:
+            # Determine agent directory from extra_params
+            agent_directory = "app"  # default
+            if extra_params:
+                for i, param in enumerate(extra_params):
+                    if param in ["-dir", "--agent-directory"] and i + 1 < len(
+                        extra_params
+                    ):
+                        agent_directory = extra_params[i + 1]
+                        break
+            essential_files = [
+                "pyproject.toml",
+                f"{agent_directory}/agent.py",
+                "Makefile",
+            ]
+
         for file in essential_files:
             assert (project_path / file).exists(), f"Missing file: {file}"
 
-        # Verify A2A inspector setup for A2A agents
-        if agent == "langgraph_base":
-            # A2A agents use inspector which is installed at runtime via make inspector
-            # Just verify the Makefile has the inspector target
+        # Verify A2A inspector setup for A2A agents (Python only for now)
+        if agent == "langgraph" and not is_go:
             makefile_path = project_path / "Makefile"
-            assert makefile_path.exists(), "Makefile missing"
             makefile_content = makefile_path.read_text()
             assert "inspector:" in makefile_content, (
                 "inspector target missing in Makefile"
             )
 
-        # Install dependencies
+        # Set environment variable for integration tests
+        env = os.environ.copy()
+        env["INTEGRATION_TEST"] = "TRUE"
+
+        # Install dependencies and run tests using make (handles both Python and Go)
         run_command(
-            [
-                "uv",
-                "sync",
-                "--dev",
-                "--extra",
-                "lint",
-                "--frozen",
-            ],
+            ["make", "install"],
             project_path,
             "Installing dependencies",
             stream_output=False,
         )
 
-        # Run tests
-        test_dirs = ["tests/unit", "tests/integration"]
-        for test_dir in test_dirs:
-            # Set environment variable for integration tests
-            env = os.environ.copy()
-            env["INTEGRATION_TEST"] = "TRUE"
-
-            run_command(
-                ["uv", "run", "pytest", test_dir],
-                project_path,
-                f"Running {test_dir} tests",
-                env=env,
-            )
+        run_command(
+            ["make", "test"],
+            project_path,
+            "Running tests",
+            env=env,
+        )
 
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e!s}")
@@ -131,11 +182,16 @@ def _run_agent_test(
 @pytest.mark.parametrize(
     "agent,deployment_target,extra_params",
     get_test_combinations_to_run(),
-    # Edit here to manually force a specific combination e.g [("langgraph_base", "agent_engine", None)]
+    # Edit here to manually force a specific combination e.g [("langgraph", "agent_engine", None)]
 )
 def test_agent_deployment(
     agent: str, deployment_target: str, extra_params: list[str] | None
 ) -> None:
     """Test agent templates with different deployment targets"""
+    # Check if required runtime is available
+    runtime_available, skip_reason = check_runtime_available(agent)
+    if not runtime_available:
+        pytest.skip(skip_reason)
+
     console.print(f"[bold cyan]Testing combination:[/] {agent}, {deployment_target}")
     _run_agent_test(agent, deployment_target, extra_params)

@@ -13,7 +13,7 @@ The configuration fields are the same for both types of templates.
 
 | Field               | Type   | Required | Description                                                                                             |
 | ------------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------- |
-| `base_template`     | string | Yes (for remote agents only)      | The name of the built-in agent that the remote template will inherit from (e.g., `adk_base`, `agentic_rag`). |
+| `base_template`     | string | Yes (for remote agents only)      | The name of the built-in agent that the remote template will inherit from (e.g., `adk`, `agentic_rag`). |
 | `name`              | string | Yes      | The display name of your template, shown in the `list` command.                                         |
 | `description`       | string | Yes      | A brief description of your template, also shown in the `list` command.                                 |
 | `example_question`  | string | No       | An example question or prompt that will be included in the generated project's `README.md`.             |
@@ -25,7 +25,7 @@ This object contains fields that control the generated project's features and be
 
 | Field                       | Type           | Description                                                                                                                                 |
 | --------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deployment_targets`        | list(string)   | A list of deployment targets your template supports. Options: `agent_engine`, `cloud_run`.                                                  |
+| `deployment_targets`        | list(string)   | A list of deployment targets your template supports. Options: `agent_engine`, `cloud_run`, `gke`.                                           |
 | `tags`                      | list(string)   | A list of tags for categorization. The `adk` tag enables special integrations with the Agent Development Kit.                                 |
 | `frontend_type`             | string         | Specifies the frontend to use. Examples: `adk_live_react`, `inspector`. Defaults to `None` (no frontend).                                    |
 | `agent_directory`           | string         | The name of the directory where agent code will be placed. Defaults to `app`. Can be overridden by the CLI `--agent-directory` parameter.    |

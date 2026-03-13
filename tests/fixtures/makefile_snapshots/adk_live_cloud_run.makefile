@@ -1,3 +1,4 @@
+
 # ==============================================================================
 # Installation & Setup
 # ==============================================================================
@@ -26,8 +27,9 @@ playground: build-frontend-if-needed
 # ==============================================================================
 
 # Launch local development server with hot-reload
+# Usage: make local-backend [PORT=8000] - Specify PORT for parallel scenario testing
 local-backend:
-	uv run uvicorn test_adk_live.fast_api_app:app --host localhost --port 8000 --reload
+	uv run uvicorn test_adk_live.fast_api_app:app --host localhost --port $(or $(PORT),8000) --reload
 
 # ==============================================================================
 # ADK Live Commands
@@ -68,7 +70,7 @@ deploy:
 		--labels "" \
 		--update-build-env-vars "AGENT_VERSION=$(shell awk -F'"' '/^version = / {print $$2}' pyproject.toml || echo '0.0.0')" \
 		--update-env-vars \
-		"COMMIT_SHA=$(shell git rev-parse HEAD)" \
+		"" \
 		$(if $(IAP),--iap) \
 		$(if $(PORT),--port=$(PORT))
 

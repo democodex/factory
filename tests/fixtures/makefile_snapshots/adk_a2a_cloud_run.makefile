@@ -1,3 +1,4 @@
+
 # ==============================================================================
 # Installation & Setup
 # ==============================================================================
@@ -27,8 +28,9 @@ playground:
 # ==============================================================================
 
 # Launch local development server with hot-reload
+# Usage: make local-backend [PORT=8000] - Specify PORT for parallel scenario testing
 local-backend:
-	uv run uvicorn test_a2a.fast_api_app:app --host localhost --port 8000 --reload
+	uv run uvicorn test_a2a.fast_api_app:app --host localhost --port $(or $(PORT),8000) --reload
 
 # ==============================================================================
 # A2A Protocol Inspector
@@ -102,7 +104,7 @@ deploy:
 		--labels "created-by=adk" \
 		--update-build-env-vars "AGENT_VERSION=$(shell awk -F'"' '/^version = / {print $$2}' pyproject.toml || echo '0.0.0')" \
 		--update-env-vars \
-		"COMMIT_SHA=$(shell git rev-parse HEAD),APP_URL=https://test-a2a-$$PROJECT_NUMBER.us-central1.run.app" \
+		"APP_URL=https://test-a2a-$$PROJECT_NUMBER.us-central1.run.app" \
 		$(if $(IAP),--iap) \
 		$(if $(PORT),--port=$(PORT))
 
@@ -126,6 +128,33 @@ setup-dev-env:
 test:
 	uv sync --dev
 	uv run pytest tests/unit && uv run pytest tests/integration
+
+# ==============================================================================
+# Agent Evaluation
+# ==============================================================================
+
+# Run agent evaluation using ADK eval
+# Usage: make eval [EVALSET=tests/eval/evalsets/basic.evalset.json] [EVAL_CONFIG=tests/eval/eval_config.json]
+eval:
+	@echo "==============================================================================="
+	@echo "| Running Agent Evaluation                                                    |"
+	@echo "==============================================================================="
+	uv sync --dev --extra eval
+	uv run adk eval ./test_a2a $${EVALSET:-tests/eval/evalsets/basic.evalset.json} \
+		$(if $(EVAL_CONFIG),--config_file_path=$(EVAL_CONFIG),$(if $(wildcard tests/eval/eval_config.json),--config_file_path=tests/eval/eval_config.json,))
+
+# Run evaluation with all evalsets
+eval-all:
+	@echo "==============================================================================="
+	@echo "| Running All Evalsets                                                        |"
+	@echo "==============================================================================="
+	@for evalset in tests/eval/evalsets/*.evalset.json; do \
+		echo ""; \
+		echo "▶ Running: $$evalset"; \
+		$(MAKE) eval EVALSET=$$evalset || exit 1; \
+	done
+	@echo ""
+	@echo "✅ All evalsets completed"
 
 # Run code quality checks (codespell, ruff, ty)
 lint:

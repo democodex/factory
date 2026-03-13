@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -307,11 +307,11 @@ class TestSetupCICD:
                 mock_response.stdout = '{"isEmpty": true}'
                 mock_response.returncode = 0
                 print("Mocking repository view command")
-            # Mock gsutil commands
-            elif "gsutil" in command:
+            # Mock gcloud storage commands
+            elif "gcloud" in command and "storage" in command:
                 mock_response.stdout = ""
                 mock_response.returncode = 0
-                print("Mocking gsutil command")
+                print("Mocking gcloud storage command")
             # Mock git init
             elif "git" in command and "init" in command:
                 mock_response.stdout = ""

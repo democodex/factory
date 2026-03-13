@@ -1,3 +1,4 @@
+
 # ==============================================================================
 # Installation & Setup
 # ==============================================================================
@@ -26,8 +27,9 @@ playground:
 # ==============================================================================
 
 # Launch local development server with hot-reload
+# Usage: make local-backend [PORT=8000] - Specify PORT for parallel scenario testing
 local-backend:
-	uv run uvicorn test_langgraph.fast_api_app:app --host localhost --port 8000 --reload
+	uv run uvicorn test_langgraph.fast_api_app:app --host localhost --port $(or $(PORT),8000) --reload
 
 # ==============================================================================
 # A2A Protocol Inspector
@@ -101,7 +103,7 @@ deploy:
 		--labels "" \
 		--update-build-env-vars "AGENT_VERSION=$(shell awk -F'"' '/^version = / {print $$2}' pyproject.toml || echo '0.0.0')" \
 		--update-env-vars \
-		"COMMIT_SHA=$(shell git rev-parse HEAD),APP_URL=https://test-langgraph-$$PROJECT_NUMBER.us-central1.run.app" \
+		"APP_URL=https://test-langgraph-$$PROJECT_NUMBER.us-central1.run.app" \
 		$(if $(IAP),--iap) \
 		$(if $(PORT),--port=$(PORT))
 

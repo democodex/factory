@@ -67,10 +67,11 @@ See [Installation Guide](https://googlecloudplatform.github.io/agent-starter-pac
 
 | Agent Name                  | Description                                                                                                                       |
 |-----------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| `adk_base`      | A base ReAct agent implemented using Google's [Agent Development Kit](https://github.com/google/adk-python) |
-| `adk_a2a_base`  | An ADK agent with [Agent2Agent (A2A) Protocol](https://a2a-protocol.org/) support for distributed agent communication and interoperability |
+| `adk`      | A base ReAct agent implemented using Google's [Agent Development Kit](https://github.com/google/adk-python) |
+| `adk_a2a`  | An ADK agent with [Agent2Agent (A2A) Protocol](https://a2a-protocol.org/) support for distributed agent communication and interoperability |
 | `agentic_rag` | A RAG agent for document retrieval and Q&A. Supporting [Vertex AI Search](https://cloud.google.com/generative-ai-app-builder/docs/enterprise-search-introduction) and [Vector Search](https://cloud.google.com/vertex-ai/docs/vector-search/overview).       |
-| `langgraph_base`      | A base ReAct agent implemented using LangChain's [LangGraph](https://github.com/langchain-ai/langgraph) |
+| `langgraph`      | A base ReAct agent implemented using LangChain's [LangGraph](https://github.com/langchain-ai/langgraph) |
+| `adk_java`   | A base ReAct agent implemented using Google's [Agent Development Kit for Java](https://github.com/google/adk-java) |
 | `adk_live`       | A real-time multimodal RAG agent powered by Gemini, supporting audio/video/text chat     |
 
 **More agents are on the way!** We are continuously expanding our [agent library](https://googlecloudplatform.github.io/agent-starter-pack/agents/overview). Have a specific agent type in mind? [Raise an issue as a feature request!](https://github.com/GoogleCloudPlatform/agent-starter-pack/issues/new?labels=enhancement)
@@ -92,14 +93,14 @@ Explore amazing projects built with the Agent Starter Pack!
 The `agent-starter-pack` offers key features to accelerate and simplify the development of your agent:
 - **🔄 [CI/CD Automation](https://googlecloudplatform.github.io/agent-starter-pack/cli/setup_cicd)** - A single command to set up a complete CI/CD pipeline for all environments, supporting both **Google Cloud Build** and **GitHub Actions**.
 - **📥 [Data Pipeline for RAG with Terraform/CI-CD](https://googlecloudplatform.github.io/agent-starter-pack/guide/data-ingestion)** - Seamlessly integrate a data pipeline to process embeddings for RAG into your agent system. Supporting [Vertex AI Search](https://cloud.google.com/generative-ai-app-builder/docs/enterprise-search-introduction) and [Vector Search](https://cloud.google.com/vertex-ai/docs/vector-search/overview).
-- **[Remote Templates](docs/guide/remote-templating.md)**: Create and share your own agent starter packs templates from any Git repository.
+- **[Remote Templates](https://googlecloudplatform.github.io/agent-starter-pack/remote-templates/)**: Create and share your own agent starter packs templates from any Git repository.
 - **🤖 Gemini CLI Integration** - Use the [Gemini CLI](https://github.com/google-gemini/gemini-cli) and the included `GEMINI.md` context file to ask questions about your template, agent architecture, and the path to production. Get instant guidance and code examples directly in your terminal.
 
 ## High-Level Architecture
 
 This starter pack covers all aspects of Agent development, from prototyping and evaluation to deployment and monitoring.
 
-![High Level Architecture](docs/images/ags_high_level_architecture.png "Architecture")
+![High Level Architecture](docs/images/asp_high_level_architecture.png "Architecture")
 
 ---
 
@@ -126,9 +127,9 @@ Visit our [documentation site](https://googlecloudplatform.github.io/agent-start
 
 ### Video Walkthrough:
 
-- **[Exploring the Agent Starter Pack](https://www.youtube.com/watch?v=9zqwym-N3lg)**: A comprehensive tutorial demonstrating how to rapidly deploy AI Agents using the Agent Starter Pack, covering architecture, templates, and step-by-step deployment.
+- **[From Demo to Production with Agent Starter Pack](https://www.youtube.com/watch?v=mtJMYgJkTt8)**: Learn how the Agent Starter Pack acts as an Automated Architect, building the professional infrastructure for your AI project in seconds. Covers why most AI projects fail at deployment and how ASP automates Terraform, CI/CD, and observability.
 
-- **[6-minute introduction](https://www.youtube.com/live/eZ-8UQ_t4YM?feature=shared&t=2791)** (April 2024): Explaining the Agent Starter Pack and demonstrating its key features. Part of the Kaggle GenAI intensive course.
+- **[6-minute introduction](https://www.youtube.com/live/eZ-8UQ_t4YM?feature=shared&t=2791)** (April 2025): Explaining the Agent Starter Pack and demonstrating its key features. Part of the Kaggle GenAI intensive course.
 
 Looking for more examples and resources for Generative AI on Google Cloud? Check out the [GoogleCloudPlatform/generative-ai](https://github.com/GoogleCloudPlatform/generative-ai) repository for notebooks, code samples, and more!
 

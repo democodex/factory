@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -188,7 +188,7 @@ class TestGeminiEnterpriseRegistration:
                         "create",
                         project_name,
                         "--agent",
-                        "adk_base",
+                        "adk",
                         "--deployment-target",
                         "agent_engine",
                         "--output-dir",
@@ -470,7 +470,7 @@ class TestGeminiEnterpriseRegistration:
                         "create",
                         project_name,
                         "--agent",
-                        "adk_a2a_base",
+                        "adk_a2a",
                         "--deployment-target",
                         "cloud_run",
                         "--output-dir",
@@ -530,7 +530,7 @@ class TestGeminiEnterpriseRegistration:
 
                 # Construct agent card URL following the template convention
                 # Format: {service_url}/a2a/{agent_directory}/.well-known/agent-card.json
-                # For adk_a2a_base template, agent_directory is "app"
+                # For adk_a2a template, agent_directory is "app"
                 agent_card_url = f"{service_url}/a2a/app/.well-known/agent-card.json"
                 logger.info(f"✅ Agent card URL: {agent_card_url}")
 

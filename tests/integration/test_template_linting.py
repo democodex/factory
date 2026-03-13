@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 import os
 import pathlib
-import subprocess
+import shutil
 from datetime import datetime
 
 from rich.console import Console
@@ -24,6 +24,30 @@ from tests.utils.get_agents import get_test_combinations_to_run
 
 console = Console()
 TARGET_DIR = "target"
+
+# Language runtime requirements for each agent type
+AGENT_RUNTIME_REQUIREMENTS: dict[str, tuple[str, str]] = {
+    # agent_suffix: (command_to_check, display_name)
+    "_go": ("go", "Go"),
+    "_java": ("mvn", "Maven"),
+    "_ts": ("node", "Node.js"),
+}
+
+
+def check_runtime_available(agent: str) -> tuple[bool, str]:
+    """Check if the required runtime for an agent is available.
+
+    Returns:
+        Tuple of (is_available, skip_reason)
+    """
+    for suffix, (command, display_name) in AGENT_RUNTIME_REQUIREMENTS.items():
+        if agent.endswith(suffix):
+            if shutil.which(command) is None:
+                return (
+                    False,
+                    f"{display_name} not installed, skipping {agent}",
+                )
+    return True, ""
 
 
 def test_template_linting(
@@ -76,40 +100,9 @@ def test_template_linting(
                         f"Found unrendered placeholders in Makefile for {agent} with {deployment_target}"
                     )
 
-        # Install dependencies
-        run_command(
-            [
-                "uv",
-                "sync",
-                "--dev",
-                "--extra",
-                "lint",
-                "--frozen",
-            ],
-            project_path,
-            "Installing dependencies",
-        )
-
-        # Run linting commands one by one
-        lint_commands = [
-            ["uv", "run", "codespell"],
-            ["uv", "run", "ruff", "check", ".", "--diff"],
-            ["uv", "run", "ruff", "format", ".", "--check", "--diff"],
-            ["uv", "run", "ty", "check", "."],
-        ]
-
-        for cmd in lint_commands:
-            try:
-                command_name = cmd[2]
-                command_args = cmd[3] if len(cmd) > 3 else ""
-                run_command(cmd, project_path, f"Running {command_name} {command_args}")
-            except subprocess.CalledProcessError as e:
-                console.print(f"[bold red]Linting failed on {cmd[2]}[/]")
-                if e.stdout:
-                    console.print(e.stdout)
-                if e.stderr:
-                    console.print(e.stderr)
-                raise
+        # Run make install and make lint (works for both Python and Go projects)
+        run_command(["make", "install"], project_path, "Installing dependencies")
+        run_command(["make", "lint"], project_path, "Running lint")
 
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e!s}")
@@ -121,6 +114,12 @@ def test_all_templates() -> None:
     combinations = get_test_combinations_to_run()
 
     for agent, deployment_target, extra_params in combinations:
+        # Check if required runtime is available
+        runtime_available, skip_reason = check_runtime_available(agent)
+        if not runtime_available:
+            console.print(f"\n[bold yellow]Skipping:[/] {skip_reason}")
+            continue
+
         console.print(f"\n[bold cyan]Testing {agent} with {deployment_target}[/]")
         test_template_linting(agent, deployment_target, extra_params)
 

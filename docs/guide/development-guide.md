@@ -2,6 +2,10 @@
 
 This guide walks you through the entire lifecycle of creating, developing, deploying, and monitoring your agent project.
 
+::: tip Quick Reference
+Need a command reminder? Check the [Command Cheatsheet](/guide/getting-started#command-cheatsheet) for quick access to all available commands.
+:::
+
 ::: tip Our Philosophy: "Bring Your Own Agent"
 This starter pack provides the scaffolding for UI, infrastructure, deployment, and monitoring. You focus on building your unique agent logic, and we handle the rest.
 :::
@@ -38,30 +42,61 @@ cd <your-project>
 
 Inside, you'll find a complete project structure:
 
-*   `app/`: Backend agent code (prompts, tools, business logic). Directory name is configurable via the `--agent-directory` parameter.
-*   `.cloudbuild/`: CI/CD pipeline configurations for Google Cloud Build (if you selected Cloud Build as your CI/CD runner).
-*   `.github/`: CI/CD pipeline configurations for GitHub Actions (if you selected GitHub Actions as your CI/CD runner).
-*   `deployment/`: Terraform infrastructure-as-code files.
-*   `tests/`: Unit, integration, and load tests.
-*   `notebooks/`: Jupyter notebooks for prototyping and evaluation.
-*   `frontend/`: (If applicable) Web UI for interacting with your agent.
-*   `README.md`: **Project-specific instructions for your chosen template.**
-*   `GEMINI.md`: Use this file with AI tools (like [Gemini CLI](https://github.com/google-gemini/gemini-cli)) to ask questions about the template, ADK concepts, or project structure.
+::: code-group
+```text [Python Projects]
+app/           # Backend agent code (prompts, tools, business logic)
+.cloudbuild/   # CI/CD for Google Cloud Build (if selected)
+.github/       # CI/CD for GitHub Actions (if selected)
+deployment/    # Terraform infrastructure-as-code files
+tests/         # Unit, integration, and load tests
+notebooks/     # Jupyter notebooks for prototyping
+frontend/      # (If applicable) Web UI for your agent
+README.md      # Project-specific instructions
+GEMINI.md      # AI assistant context file
+```
+
+```text [Go Projects]
+agent/         # Backend agent code (tools, business logic)
+.cloudbuild/   # CI/CD for Google Cloud Build (if selected)
+.github/       # CI/CD for GitHub Actions (if selected)
+deployment/    # Terraform infrastructure-as-code files
+e2e/           # Integration and load tests
+README.md      # Project-specific instructions
+GEMINI.md      # AI assistant context file
+```
+:::
 
 Your development loop will look like this:
 
-1.  **Prototype:** Use the notebooks in `notebooks/` for rapid experimentation with your agent's core logic. This is ideal for trying new prompts or tools before integrating them.
-2.  **Integrate:** Edit `app/agent.py` and other files in the agent directory (usually `app/`, but configurable) to incorporate your new logic into the main application.
-3.  **Test:** Run the interactive UI playground to test your changes. It features hot-reloading, chat history, and user feedback.
+**Python Projects**
+
+1. **Prototype:** Use notebooks in `notebooks/` for rapid experimentation
+2. **Integrate:** Edit `app/agent.py` to incorporate your logic
+3. **Test:** Run the interactive playground with hot-reloading
+
+**Go Projects**
+
+1. **Integrate:** Edit `agent/agent.go` to add tools and logic
+2. **Test:** Run the interactive playground to test changes
 
 ```bash
 # Install dependencies and launch the local playground
 make install && make playground
 ```
 
-::: tip Package Management with uv
-Add new dependencies with `uv add <package>` and remove them with `uv remove <package>`.
+::: tip Package Management
+::: code-group
+```bash [Python (uv)]
+uv add <package>      # Add dependency
+uv remove <package>   # Remove dependency
+```
+
+```bash [Go]
+go get <package>      # Add dependency
+go mod tidy           # Clean up dependencies
+```
 :::
+
 > Note: The specific UI playground launched by `make playground` depends on the agent template you selected during creation.
 
 ## 2. Deploy to the Cloud
@@ -144,9 +179,28 @@ Track your agent's performance using integrated observability tools. OpenTelemet
 *   **Cloud Trace**: Inspect request flows and analyze latencies for GenAI operations at: `https://console.cloud.google.com/traces/list?project=YOUR_PROJECT_ID`
 *   **Visualization** (Optional): Connect your BigQuery data to BI tools for custom dashboards.
 
-➡️ For complete setup instructions, example queries, and testing in dev, see the [Observability Guide](./observability.md).
+➡️ For complete setup instructions, example queries, and testing in dev, see the [Observability Guide](./observability/).
 
-## 4. Advanced Customization
+## 4. Keeping Your Project Up-to-Date
+
+As agent-starter-pack evolves with new features, security fixes, and best practices, you can upgrade your existing projects to newer versions using the `upgrade` command.
+
+```bash
+# Preview what would change
+uvx agent-starter-pack upgrade --dry-run
+
+# Apply the upgrade
+uvx agent-starter-pack upgrade
+```
+
+The upgrade uses an intelligent 3-way merge:
+- **Auto-updates** scaffolding files you haven't modified
+- **Preserves** your customizations when ASP hasn't changed those files
+- **Prompts** you to resolve conflicts when both have changed
+
+➡️ See the [`upgrade` CLI reference](../cli/upgrade.md) for detailed usage.
+
+## 5. Advanced Customization
 
 Tailor the starter pack further to meet your specific requirements.
 

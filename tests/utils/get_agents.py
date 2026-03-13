@@ -37,14 +37,14 @@ def get_test_combinations_to_run() -> list[tuple[str, str, list[str] | None]]:
             extra_params_env = None
             if len(env_combo_parts) > 2:
                 extra_params_env = env_combo_parts[2:]
-                # Add default session type for cloud_run if not explicitly provided
+                # Add default session type for cloud_run/gke if not explicitly provided
                 if (
-                    deployment_target == "cloud_run"
+                    deployment_target in ("cloud_run", "gke")
                     and "--session-type" not in extra_params_env
                 ):
                     extra_params_env.extend(["--session-type", "in_memory"])
-            elif deployment_target == "cloud_run":
-                # No extra params but cloud_run deployment, add default session type
+            elif deployment_target in ("cloud_run", "gke"):
+                # No extra params but cloud_run/gke deployment, add default session type
                 extra_params_env = ["--session-type", "in_memory"]
 
             env_combo = (agent, deployment_target, extra_params_env)
@@ -63,28 +63,26 @@ def get_test_combinations_to_run() -> list[tuple[str, str, list[str] | None]]:
         if agent == "agentic_rag":
             # Add vertex_ai_search variant
             params = [
-                "--include-data-ingestion",
                 "--datastore",
                 "vertex_ai_search",
             ]
-            # Add session type for cloud_run deployment
-            if deployment_target == "cloud_run":
+            # Add session type for cloud_run/gke deployment
+            if deployment_target in ("cloud_run", "gke"):
                 params.extend(["--session-type", "in_memory"])
             combos.append((agent, deployment_target, params))
 
             # Add vertex_ai_vector_search variant
             params = [
-                "--include-data-ingestion",
                 "--datastore",
                 "vertex_ai_vector_search",
             ]
-            # Add session type for cloud_run deployment
-            if deployment_target == "cloud_run":
+            # Add session type for cloud_run/gke deployment
+            if deployment_target in ("cloud_run", "gke"):
                 params.extend(["--session-type", "in_memory"])
             combos.append((agent, deployment_target, params))
         else:
-            # Add default session type for cloud_run deployment
-            if deployment_target == "cloud_run":
+            # Add default session type for cloud_run/gke deployment
+            if deployment_target in ("cloud_run", "gke"):
                 params = ["--session-type", "in_memory"]
             combos.append((agent, deployment_target, params))
 

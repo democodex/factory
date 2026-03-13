@@ -21,7 +21,7 @@ Specify which template to use for your agent:
 
 **Built-in agents:**
 ```bash
-uvx agent-starter-pack create my-agent -a adk_base
+uvx agent-starter-pack create my-agent -a adk
 uvx agent-starter-pack create my-agent -a chat_agent
 ```
 
@@ -46,8 +46,9 @@ If omitted, you'll see an interactive list of available agents.
 
 ### `--deployment-target`, `-d` TARGET
 Deployment target for your agent:
-- `cloud_run` - Deploy to Google Cloud Run
-- `agent_engine` - Deploy to Google Cloud Agent Engine
+- `cloud_run` - Deploy to Google Cloud Run (serverless containers)
+- `gke` - Deploy to Google Kubernetes Engine (Autopilot)
+- `agent_engine` - Deploy to Google Cloud Agent Engine (managed platform)
 
 ### `--cicd-runner` RUNNER
 CI/CD runner to use:
@@ -74,18 +75,14 @@ GCP region for deployment (default: `us-central1`)
 
 ## Data & Storage Options
 
-### `--include-data-ingestion`, `-i`
-Include data ingestion pipeline components in the project.
-
 ### `--datastore`, `-ds` DATASTORE
-Type of datastore for data ingestion (requires `--include-data-ingestion`):
+Type of datastore for data ingestion. Automatically enables data ingestion when specified. For agents that require data ingestion (e.g., `agentic_rag`), you will be prompted to select a datastore if not specified:
 - `vertex_ai_search`
-- `vertex_ai_vector_search` 
-- `vertex_ai_vector_search` 
+- `vertex_ai_vector_search`
 - `cloud_sql`
 
 ### `--session-type` TYPE
-Session storage type (for Cloud Run deployment):
+Session storage type (for Cloud Run and GKE deployments):
 - `in_memory` - Store sessions in memory
 - `cloud_sql` - Store sessions in Cloud SQL (PostgreSQL)
 - `agent_engine` - Use Agent Engine session management
@@ -105,20 +102,20 @@ Override the base template specified in a remote template's configuration. Only 
 When overriding the base template, you'll be prompted to add required dependencies using `uv add`:
 
 ```bash
-# Use adk_a2a_base as base instead of the remote template's default
-uvx agent-starter-pack create my-agent -a github.com/user/template --base-template adk_a2a_base
+# Use adk_a2a as base instead of the remote template's default
+uvx agent-starter-pack create my-agent -a github.com/user/template --base-template adk_a2a
 
-✓ Base template override: Using 'adk_a2a_base' as foundation
+✓ Base template override: Using 'adk_a2a' as foundation
   This requires adding the following dependencies:
     • google-adk>=1.16.0,<2.0.0
-    • a2a-sdk~=0.3.9
+    • a2a-sdk~=0.3.22
 
 ? Add these dependencies automatically? [Y/n]
 ```
 
 With `--auto-approve`, dependencies are added automatically without prompting:
 ```bash
-uvx agent-starter-pack create my-agent -a template --base-template adk_a2a_base --auto-approve
+uvx agent-starter-pack create my-agent -a template --base-template adk_a2a --auto-approve
 # Dependencies are added automatically
 ```
 
@@ -142,14 +139,14 @@ uvx agent-starter-pack create my-agent -a template --in-folder
 - Working within established repository structures
 - Containerized development environments
 
-**Automatic Backup:** When using `--in-folder`, a complete backup of your directory is automatically created as `.backup_[dirname]_[timestamp]` before any changes are made.
+**Automatic Backup:** When using `--in-folder`, a complete backup of your directory is automatically created at `~/.agent-starter-pack/backups/[dirname]_[timestamp]` before any changes are made.
 
 ## Automation Options
 
 ### `--auto-approve`, `--yes`, `-y`
 Skip interactive confirmation prompts and use sensible defaults:
 - Project name defaults to `my-agent`
-- Agent defaults to first available (typically `adk_base`)
+- Agent defaults to first available (typically `adk`)
 - Deployment target defaults to `agent_engine`
 - CI/CD runner defaults to `google_cloud_build`
 
@@ -167,7 +164,7 @@ Enable debug logging for troubleshooting.
 ### Quick Start
 
 ```bash
-# Create with all defaults (project: my-agent, agent: adk_base, target: agent_engine)
+# Create with all defaults (project: my-agent, agent: adk, target: agent_engine)
 uvx agent-starter-pack create -y
 
 # Fully interactive mode
@@ -183,8 +180,14 @@ uvx agent-starter-pack create my-prototype -p -d agent_engine
 # Create a new project with specific name
 uvx agent-starter-pack create my-agent-project
 
-# Create with specific built-in agent
-uvx agent-starter-pack create my-agent -a adk_base -d cloud_run
+# Create with specific built-in agent (Python)
+uvx agent-starter-pack create my-agent -a adk -d cloud_run
+
+# Create a Go agent (Cloud Run only)
+uvx agent-starter-pack create my-go-agent -a adk_go
+
+# Create a TypeScript agent (Cloud Run only)
+uvx agent-starter-pack create my-ts-agent -a adk_ts
 ```
 
 ### Remote Templates
@@ -210,7 +213,7 @@ uvx agent-starter-pack create my-agent -a adk@data-science --base-template adk_l
 
 ```bash
 # Include data ingestion with specific datastore
-uvx agent-starter-pack create my-rag-agent -a adk_base -i -ds cloud_sql -d cloud_run
+uvx agent-starter-pack create my-rag-agent -a adk -i -ds cloud_sql -d cloud_run
 
 # Create with custom region and CI/CD
 uvx agent-starter-pack create my-agent -a template-url --region europe-west1 --cicd-runner github_actions
@@ -219,7 +222,7 @@ uvx agent-starter-pack create my-agent -a template-url --region europe-west1 --c
 uvx agent-starter-pack create my-agent -a adk@data-science --in-folder
 
 # Customize agent directory name
-uvx agent-starter-pack create my-agent -a adk_base --agent-directory chatbot
+uvx agent-starter-pack create my-agent -a adk --agent-directory chatbot
 
 # Skip all prompts for automation
 uvx agent-starter-pack create my-agent -a template-url -y --skip-checks

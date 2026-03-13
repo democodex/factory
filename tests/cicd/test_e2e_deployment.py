@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -97,19 +97,19 @@ def get_test_matrix() -> list[CICDTestConfig]:
     return [
         # Google Cloud Build configurations (default)
         # CICDTestConfig(
-        #     agent="langgraph_base",
+        #     agent="langgraph",
         #     deployment_target="agent_engine",
         #     extra_params="",
         # ),
         # CICDTestConfig(
-        #     agent="langgraph_base",
+        #     agent="langgraph",
         #     deployment_target="cloud_run",
         #     extra_params="",
         # ),
         CICDTestConfig(
             agent="agentic_rag",
             deployment_target="agent_engine",
-            extra_params="--include-data-ingestion,--datastore,vertex_ai_vector_search",
+            extra_params="--datastore,vertex_ai_vector_search",
         ),
         # CICDTestConfig(
         #     agent="agentic_rag",
@@ -128,7 +128,7 @@ def get_test_matrix() -> list[CICDTestConfig]:
         #     extra_params="--cicd-runner,github_actions",
         # ),
         # CICDTestConfig(
-        #     agent="langgraph_base",
+        #     agent="langgraph",
         #     deployment_target="cloud_run",
         #     extra_params="--cicd-runner,github_actions",
         # ),
@@ -905,6 +905,27 @@ class TestE2EDeployment:
                         logger.error(
                             f"Error cleaning up Agent Engine service {project_name}: {e}"
                         )
+                elif deployment_target == "gke":
+                    logger.info(f"Cleaning up GKE clusters in project {env_project}...")
+                    try:
+                        for suffix in ["dev", "staging", "prod"]:
+                            cluster_name = f"{project_name}-{suffix}"
+                            logger.info(f"Deleting GKE cluster: {cluster_name}")
+                            run_command(
+                                [
+                                    "gcloud",
+                                    "container",
+                                    "clusters",
+                                    "delete",
+                                    cluster_name,
+                                    f"--project={env_project}",
+                                    f"--region={region}",
+                                    "--quiet",
+                                ],
+                                check=False,
+                            )
+                    except Exception as e:
+                        logger.error(f"Error cleaning up GKE clusters: {e}")
 
             # 2. Try to manually delete specific BigQuery datasets (feedback and telemetry)
             for env_project in [
@@ -1135,24 +1156,24 @@ class TestE2EDeployment:
     def remove_telemetry_for_quota_savings(
         self, project_dir: Path, agent: str, deployment_target: str, extra_params: str
     ) -> None:
-        """Remove telemetry.tf files except for adk_base base variants.
+        """Remove telemetry.tf files except for adk base variants.
 
         Cloud Logging buckets have a 7-day soft delete period, so cleanup doesn't free
         quota. We only test telemetry with two representative combinations:
-        - adk_base + agent_engine (Cloud Build)
-        - adk_base + cloud_run (Cloud Build)
+        - adk + agent_engine (Cloud Build)
+        - adk + cloud_run (Cloud Build)
 
         This covers both deployment targets while avoiding quota limits.
-        Excluded variants: GitHub Actions, Cloud SQL session types, and non-adk_base agents.
+        Excluded variants: GitHub Actions, Cloud SQL session types, and non-adk agents.
         """
-        # Keep telemetry only for adk_base with basic agent_engine or cloud_run
+        # Keep telemetry only for adk with basic agent_engine or cloud_run
         # Exclude GitHub Actions and Cloud SQL variants
         norm_extra_params = extra_params.replace(" ", "")
         is_github_actions = "--cicd-runner,github_actions" in norm_extra_params
         is_cloud_sql = "--session-type,cloud_sql" in norm_extra_params
 
         should_keep_telemetry = (
-            agent == "adk_base"
+            agent == "adk"
             and deployment_target in ["agent_engine", "cloud_run"]
             and not is_github_actions
             and not is_cloud_sql
@@ -1172,7 +1193,9 @@ class TestE2EDeployment:
 
         telemetry_files = [
             project_dir / "deployment" / "terraform" / "telemetry.tf",
+            project_dir / "deployment" / "terraform" / "telemetry_outputs.tf",
             project_dir / "deployment" / "terraform" / "dev" / "telemetry.tf",
+            project_dir / "deployment" / "terraform" / "dev" / "telemetry_outputs.tf",
         ]
 
         for tf_file in telemetry_files:
@@ -1196,7 +1219,12 @@ class TestE2EDeployment:
             pytest.skip("Skipping test: Previous test failed in the session")
 
         # Set region based on agent type
-        region = "us-central1" if config.agent == "adk_live" else DEFAULT_REGION
+        if config.agent == "adk_live":
+            region = "us-central1"
+        elif config.agent == "agentic_rag":
+            region = "europe-west4"
+        else:
+            region = DEFAULT_REGION
         github_pat = os.environ.get("GITHUB_PAT")
         github_app_installation_id = os.environ.get("GITHUB_APP_INSTALLATION_ID")
 
@@ -1277,7 +1305,7 @@ class TestE2EDeployment:
             # Update datastore name in terraform variables to avoid conflicts
             self.update_datastore_name(new_project_dir, unique_id)
 
-            # Remove telemetry for quota savings (keep only adk_base + agent_engine/cloud_run)
+            # Remove telemetry for quota savings (keep only adk + agent_engine/cloud_run)
             self.remove_telemetry_for_quota_savings(
                 new_project_dir,
                 config.agent,

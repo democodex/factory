@@ -1,5 +1,5 @@
 # ruff: noqa
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from google.adk.agents import Agent
-from google.adk.apps.app import App
+from google.adk.apps import App
 from google.adk.models import Gemini
 from google.genai import types
 {%- if not cookiecutter.use_google_api_key %}

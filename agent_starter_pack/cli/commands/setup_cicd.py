@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import backoff
@@ -31,6 +32,7 @@ from agent_starter_pack.cli.utils.cicd import (
     is_github_authenticated,
     run_command,
 )
+from agent_starter_pack.cli.utils.logging import display_welcome_banner
 
 console = Console()
 
@@ -211,11 +213,69 @@ def prompt_for_git_provider() -> str:
 
 def validate_working_directory() -> None:
     """Ensure we're in the project root directory."""
-    if not Path("pyproject.toml").exists():
+    # Accept pyproject.toml (Python), .asp.toml (Go), or pom.xml (Java)
+    if (
+        not Path("pyproject.toml").exists()
+        and not Path(".asp.toml").exists()
+        and not Path("pom.xml").exists()
+    ):
         raise click.UsageError(
-            "This command must be run from the project root directory containing pyproject.toml. "
+            "This command must be run from the project root directory containing "
+            "pyproject.toml (Python), .asp.toml (Go), or pom.xml (Java). "
             "Make sure you are in the folder created by agent-starter-pack."
         )
+
+
+def get_project_name_from_config() -> str | None:
+    """Get project name from pyproject.toml, .asp.toml, or pom.xml.
+
+    Returns:
+        Project name if found, None otherwise.
+    """
+    # Try .asp.toml first (Go projects)
+    if Path(".asp.toml").exists():
+        try:
+            with open(".asp.toml", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("name ="):
+                        return line.split("=")[1].strip().strip("\"'")
+        except Exception:
+            pass
+
+    # Try pyproject.toml (Python projects)
+    if Path("pyproject.toml").exists():
+        try:
+            with open("pyproject.toml", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip().startswith("name ="):
+                        return line.split("=")[1].strip().strip("\"'")
+        except Exception:
+            pass
+
+    # Try pom.xml (Java projects)
+    if Path("pom.xml").exists():
+        try:
+            tree = ET.parse("pom.xml")
+            root = tree.getroot()
+
+            # Handle Maven namespace
+            ns = ""
+            if root.tag.startswith("{"):
+                ns = root.tag.split("}")[0] + "}"
+
+            # Try <name> element first
+            name_elem = root.find(f"{ns}name")
+            if name_elem is not None and name_elem.text:
+                return name_elem.text.strip()
+
+            # Fallback to <artifactId>
+            artifact_id = root.find(f"{ns}artifactId")
+            if artifact_id is not None and artifact_id.text:
+                return artifact_id.text.strip()
+        except Exception:
+            pass
+
+    return None
 
 
 def detect_region_from_terraform_vars() -> str | None:
@@ -306,17 +366,8 @@ def prompt_for_repository_details(
 
     # Step 2: Get repository name if missing
     if not repository_name:
-        # Get project name from pyproject.toml as default
-        try:
-            with open("pyproject.toml", encoding="utf-8") as f:
-                for line in f:
-                    if line.strip().startswith("name ="):
-                        default_name = line.split("=")[1].strip().strip("\"'")
-                        break
-                else:
-                    default_name = f"genai-app-{int(time.time())}"
-        except FileNotFoundError:
-            default_name = f"genai-app-{int(time.time())}"
+        # Get project name from config as default
+        default_name = get_project_name_from_config() or f"genai-app-{int(time.time())}"
 
         prompt_text = (
             "Enter new repository name"
@@ -350,7 +401,7 @@ def setup_terraform_backend(
     # Ensure bucket exists
     try:
         result = run_command(
-            ["gsutil", "ls", "-b", f"gs://{bucket_name}"],
+            ["gcloud", "storage", "buckets", "describe", f"gs://{bucket_name}"],
             check=False,
             capture_output=True,
         )
@@ -359,11 +410,28 @@ def setup_terraform_backend(
             console.print(f"\n📦 Creating Terraform state bucket: {bucket_name}")
             # Create bucket
             run_command(
-                ["gsutil", "mb", "-p", project_id, "-l", region, f"gs://{bucket_name}"]
+                [
+                    "gcloud",
+                    "storage",
+                    "buckets",
+                    "create",
+                    f"gs://{bucket_name}",
+                    f"--project={project_id}",
+                    f"--location={region}",
+                ]
             )
 
             # Enable versioning
-            run_command(["gsutil", "versioning", "set", "on", f"gs://{bucket_name}"])
+            run_command(
+                [
+                    "gcloud",
+                    "storage",
+                    "buckets",
+                    "update",
+                    f"gs://{bucket_name}",
+                    "--versioning",
+                ]
+            )
     except subprocess.CalledProcessError as e:
         console.print(f"\n❌ Failed to setup state bucket: {e}")
         raise
@@ -494,6 +562,11 @@ console = Console()
     help="Flag indicating whether to create a new repository",
 )
 @click.option(
+    "--cicd-runner",
+    type=click.Choice(["google_cloud_build", "github_actions"]),
+    help="CI/CD runner to use",
+)
+@click.option(
     "--use-existing-repository",
     is_flag=True,
     default=False,
@@ -521,8 +594,10 @@ def setup_cicd(
     auto_approve: bool,
     create_repository: bool,
     use_existing_repository: bool,
+    cicd_runner: str | None = None,
 ) -> None:
     """Set up CI/CD infrastructure using Terraform."""
+    display_welcome_banner(setup_cicd_mode=True, quiet=auto_approve)
 
     # Validate mutually exclusive flags
     if create_repository and use_existing_repository:
@@ -530,12 +605,8 @@ def setup_cicd(
             "Cannot specify both --create-repository and --use-existing-repository flags"
         )
 
-    # Check if we're in the root folder by looking for pyproject.toml
-    if not Path("pyproject.toml").exists():
-        raise click.UsageError(
-            "This command must be run from the project root directory containing pyproject.toml. "
-            "Make sure you are in the folder created by agent-starter-pack."
-        )
+    # Check if we're in the root folder
+    validate_working_directory()
 
     # Prompt for staging and prod projects if not provided
     if staging_project is None:
@@ -563,10 +634,31 @@ def setup_cicd(
     else:
         console.print(f"Using provided region: {region}")
 
-    # Auto-detect CI/CD runner based on Terraform files (moved earlier)
+    # Define tf_dir unconditionally (used later)
     tf_dir = Path("deployment/terraform")
-    is_github_actions = (tf_dir / "wif.tf").exists() and (tf_dir / "github.tf").exists()
-    cicd_runner = "github_actions" if is_github_actions else "google_cloud_build"
+
+    # Check if Terraform structure exists (prototype projects may lack it)
+    if not (tf_dir / "variables.tf").exists():
+        console.print(
+            "\n❌ Terraform configuration not found in deployment/terraform/",
+            style="bold red",
+        )
+        console.print(
+            "This project appears to have been created without full deployment "
+            "configuration (e.g., in prototype mode)."
+        )
+        console.print(
+            "\nTo add deployment and CI/CD configuration, run:\n"
+            "  [cyan]uvx agent-starter-pack enhance[/]\n"
+        )
+        raise SystemExit(1)
+
+    # Auto-detect CI/CD runner based on Terraform files (moved earlier)
+    if cicd_runner is None:
+        is_github_actions = (tf_dir / "wif.tf").exists() and (
+            tf_dir / "github.tf"
+        ).exists()
+        cicd_runner = "github_actions" if is_github_actions else "google_cloud_build"
 
     display_intro_message()
 
@@ -590,12 +682,6 @@ def setup_cicd(
     if debug:
         logging.basicConfig(level=logging.DEBUG)
         console.print("> Debug mode enabled")
-
-    # Auto-detect CI/CD runner based on Terraform files
-    tf_dir = Path("deployment/terraform")
-    is_github_actions = (tf_dir / "wif.tf").exists() and (tf_dir / "github.tf").exists()
-    cicd_runner = "github_actions" if is_github_actions else "google_cloud_build"
-    if debug:
         logging.debug(f"Detected CI/CD runner: {cicd_runner}")
 
     # Ensure GitHub CLI is available and authenticated
@@ -619,17 +705,10 @@ def setup_cicd(
                 ["gh", "api", "user", "--jq", ".login"], capture_output=True
             ).stdout.strip()
         if not repository_name:
-            # Get project name from pyproject.toml or generate one
-            try:
-                with open("pyproject.toml", encoding="utf-8") as f:
-                    for line in f:
-                        if line.strip().startswith("name ="):
-                            repository_name = line.split("=")[1].strip().strip("\"'")
-                            break
-                    else:
-                        repository_name = f"genai-app-{int(time.time())}"
-            except FileNotFoundError:
-                repository_name = f"genai-app-{int(time.time())}"
+            # Get project name from config or generate one
+            repository_name = (
+                get_project_name_from_config() or f"genai-app-{int(time.time())}"
+            )
         console.print(
             f"✅ Auto-generated repository: {repository_owner}/{repository_name}"
         )

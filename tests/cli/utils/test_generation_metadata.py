@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
+from agent_starter_pack.cli.utils.generation_metadata import metadata_to_cli_args
+
 
 def load_asp_metadata(pyproject_path: pathlib.Path) -> dict[str, Any]:
     """Load agent-starter-pack metadata from pyproject.toml.
@@ -64,7 +66,7 @@ version = "0.1.0"
 [tool.agent-starter-pack]
 name = "test-project"
 description = "A test agent"
-base_template = "adk_base"
+base_template = "adk"
 agent_directory = "app"
 generated_at = "2025-12-04T15:35:34.021638+00:00"
 asp_version = "0.25.0"
@@ -109,7 +111,7 @@ version = "0.1.0"
 [tool.agent-starter-pack]
 name = "test-project"
 description = "A test agent"
-base_template = "adk_base"
+base_template = "adk"
 agent_directory = "app"
 generated_at = "2025-12-04T15:35:34.021638+00:00"
 asp_version = "0.25.0"
@@ -161,7 +163,7 @@ version = "0.1.0"
 [tool.agent-starter-pack]
 name = "test-project"
 description = "A test agent"
-base_template = "adk_base"
+base_template = "adk"
 agent_directory = "app"
 generated_at = "2025-12-04T15:35:34.021638+00:00"
 asp_version = "0.25.0"
@@ -196,7 +198,7 @@ version = "0.1.0"
 [tool.agent-starter-pack]
 name = "test-project"
 description = "A test agent"
-base_template = "adk_base"
+base_template = "adk"
 agent_directory = "app"
 generated_at = "2025-12-04T15:35:34.021638+00:00"
 asp_version = "0.25.0"
@@ -249,6 +251,61 @@ frontend_type = "None"
         assert create_params["datastore"] == "vertex_ai_search"
 
 
+class TestMetadataSkipValues:
+    """Test that skip/none values are filtered from CLI args."""
+
+    def test_skip_value_filtered(self) -> None:
+        """Test that cicd_runner='skip' is not included in CLI args."""
+        metadata = {
+            "base_template": "adk",
+            "create_params": {
+                "deployment_target": "cloud_run",
+                "cicd_runner": "skip",
+                "session_type": "in_memory",
+            },
+        }
+
+        args = metadata_to_cli_args(metadata)
+
+        assert "--cicd-runner" not in args
+        assert "skip" not in args
+        # Other params should still be present
+        assert "--deployment-target" in args
+        assert "cloud_run" in args
+
+    def test_none_value_filtered(self) -> None:
+        """Test that values of 'none' are still filtered."""
+        metadata = {
+            "base_template": "adk",
+            "create_params": {
+                "deployment_target": "cloud_run",
+                "frontend_type": "None",
+            },
+        }
+
+        args = metadata_to_cli_args(metadata)
+
+        assert "--frontend-type" not in args
+        assert "None" not in args
+
+    def test_deployment_target_none_preserved(self) -> None:
+        """Test that deployment_target='none' is preserved (valid CLI value for prototype)."""
+        metadata = {
+            "base_template": "adk",
+            "create_params": {
+                "deployment_target": "none",
+                "cicd_runner": "skip",
+            },
+        }
+
+        args = metadata_to_cli_args(metadata)
+
+        assert "--deployment-target" in args
+        assert "none" in args
+        # cicd_runner='skip' should still be filtered
+        assert "--cicd-runner" not in args
+
+
 class TestMetadataEnablesRecreation:
     """Test that metadata is sufficient to recreate identical project scaffolding."""
 
@@ -292,9 +349,28 @@ frontend_type = "streamlit"
         assert "cloud_sql" in cli_args
         assert "--cicd-runner" in cli_args
         assert "github_actions" in cli_args
-        assert "--include-data-ingestion" in cli_args or "-i" in cli_args
         assert "--datastore" in cli_args or "-ds" in cli_args
         assert "vertex_ai_vector_search" in cli_args
+
+    def test_skip_value_filtered_from_cli_args(self) -> None:
+        """Test that 'skip' values in create_params are not included in CLI args."""
+        metadata = {
+            "base_template": "adk",
+            "create_params": {
+                "deployment_target": "agent_engine",
+                "cicd_runner": "skip",
+            },
+        }
+
+        cli_args = metadata_to_cli_args(metadata)
+
+        assert "--agent" in cli_args
+        assert "adk" in cli_args
+        assert "--deployment-target" in cli_args
+        assert "agent_engine" in cli_args
+        # "skip" value should be filtered out
+        assert "--cicd-runner" not in cli_args
+        assert "skip" not in cli_args
 
     def test_metadata_round_trip(self, tmp_path: pathlib.Path) -> None:
         """Test that metadata can be parsed and used to recreate project args."""
@@ -306,7 +382,7 @@ version = "0.1.0"
 [tool.agent-starter-pack]
 name = "round-trip-test"
 description = "Test agent"
-base_template = "adk_base"
+base_template = "adk"
 agent_directory = "custom_app"
 generated_at = "2025-12-04T15:35:34.021638+00:00"
 asp_version = "0.25.0"
@@ -324,7 +400,7 @@ frontend_type = "None"
         create_params = metadata["create_params"]
 
         # Verify metadata can be used to determine original settings
-        assert metadata["base_template"] == "adk_base"
+        assert metadata["base_template"] == "adk"
         assert metadata["agent_directory"] == "custom_app"
         assert create_params["deployment_target"] == "agent_engine"
         assert create_params["cicd_runner"] == "google_cloud_build"
@@ -345,7 +421,7 @@ version = "0.1.0"
 [tool.agent-starter-pack]
 name = "my-agent"
 description = "My custom agent"
-base_template = "adk_base"
+base_template = "adk"
 agent_directory = "app"
 generated_at = "2025-12-04T15:35:34.021638+00:00"
 asp_version = "0.25.0"
@@ -370,7 +446,7 @@ frontend_type = "None"
         # Verify values are usable
         assert metadata["name"] == "my-agent"
         assert metadata["description"] == "My custom agent"
-        assert metadata["base_template"] == "adk_base"
+        assert metadata["base_template"] == "adk"
         assert metadata["agent_directory"] == "app"
 
 
@@ -407,9 +483,9 @@ class TestMetadataEnablesIdenticalRecreation:
     @pytest.mark.parametrize(
         "agent,deployment_target,session_type,cicd_runner",
         [
-            ("adk_base", "cloud_run", "in_memory", "google_cloud_build"),
-            ("adk_base", "agent_engine", None, "google_cloud_build"),
-            ("adk_base", "cloud_run", "cloud_sql", "github_actions"),
+            ("adk", "cloud_run", "in_memory", "google_cloud_build"),
+            ("adk", "agent_engine", None, "google_cloud_build"),
+            ("adk", "cloud_run", "cloud_sql", "github_actions"),
         ],
     )
     def test_metadata_enables_recreation(
@@ -583,50 +659,6 @@ class TestMetadataEnablesIdenticalRecreation:
             )
 
         return differences
-
-
-def metadata_to_cli_args(metadata: dict[str, Any]) -> list[str]:
-    """Convert metadata dictionary to CLI arguments.
-
-    This function maps the pyproject.toml metadata back to CLI arguments
-    that could be used to recreate the project.
-
-    Args:
-        metadata: Dictionary from [tool.agent-starter-pack] section
-
-    Returns:
-        List of CLI arguments
-    """
-    args: list[str] = []
-
-    # Required mappings from metadata
-    if "base_template" in metadata:
-        args.extend(["--agent", metadata["base_template"]])
-
-    if "agent_directory" in metadata and metadata["agent_directory"] != "app":
-        args.extend(["--agent-directory", metadata["agent_directory"]])
-
-    # Get create_params for the rest
-    create_params = metadata.get("create_params", {})
-
-    # Add all create_params dynamically
-    for key, value in create_params.items():
-        # Skip None, "none", "None", False, and empty values
-        if (
-            value is None
-            or value is False
-            or str(value).lower() == "none"
-            or value == ""
-        ):
-            continue
-
-        arg_name = f"--{key.replace('_', '-')}"
-        if value is True:
-            args.append(arg_name)
-        else:
-            args.extend([arg_name, str(value)])
-
-    return args
 
 
 if __name__ == "__main__":

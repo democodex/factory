@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@ from rich.console import Console
 
 from .commands.create import create
 from .commands.enhance import enhance
+from .commands.extract import extract
 from .commands.list import list_agents
 from .commands.register_gemini_enterprise import register_gemini_enterprise
 from .commands.setup_cicd import setup_cicd
+from .commands.upgrade import upgrade
 from .utils import display_update_message
 
 console = Console()
@@ -58,8 +60,10 @@ def cli() -> None:
 # Register commands
 cli.add_command(create)
 cli.add_command(enhance)
+cli.add_command(extract)
 cli.add_command(register_gemini_enterprise)
 cli.add_command(setup_cicd)
+cli.add_command(upgrade)
 cli.add_command(list_agents, name="list")
 
 

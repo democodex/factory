@@ -13,19 +13,19 @@ uvx agent-starter-pack enhance [TEMPLATE_PATH] [OPTIONS]
 - `TEMPLATE_PATH` (optional): Can be:
   - `.` (default) - Use current directory as template
   - Local directory path - Use another local directory as template  
-  - Agent name - Use a built-in agent (e.g., `adk_base`)
+  - Agent name - Use a built-in agent (e.g., `adk`)
   - Remote template - Use a remote template (e.g., `adk@gemini-fullstack`)
 
 ## Options
 
-The `enhance` command supports all the same options as [`create`](./create.md), including `--agent-directory`, `--deployment-target`, `--include-data-ingestion`, etc., plus enhance-specific options:
+The `enhance` command supports all the same options as [`create`](./create.md), including `--agent-directory`, `--deployment-target`, `--datastore`, etc., plus enhance-specific options:
 
 ### Enhance-Specific Options
 
 #### `--base-template` TEMPLATE
 Override the base template for inheritance when enhancing your existing project. Available base templates include:
-- `adk_base` - Basic agent template (default)
-- `langgraph_base` - LangGraph-based ReAct agent
+- `adk` - Basic agent template (default)
+- `langgraph` - LangGraph-based ReAct agent
 - `agentic_rag` - RAG-enabled agent template
 
 ### Key Shared Options
@@ -37,8 +37,8 @@ Name of the agent directory (overrides template default, usually `app`). This de
 
 ### Other Shared Options
 - `--name, -n` - Project name (defaults to current directory name)
-- `--deployment-target, -d` - Deployment target (`agent_engine`, `cloud_run`)
-- `--include-data-ingestion, -i` - Include data ingestion pipeline
+- `--deployment-target, -d` - Deployment target (`agent_engine`, `cloud_run`, `gke`)
+- `--datastore, -ds` - Datastore type for data ingestion
 - `--session-type` - Session storage type
 - `--google-api-key, --api-key, -k` - Use Google AI Studio API key (or placeholder if no value provided)
 - `--auto-approve, --yes, -y` - Skip confirmation prompts and use defaults
@@ -69,7 +69,7 @@ uvx agent-starter-pack enhance . --agent-directory chatbot
 uvx agent-starter-pack enhance adk@data-science --deployment-target cloud_run
 
 # Enhance with data ingestion capabilities
-uvx agent-starter-pack enhance --include-data-ingestion --datastore cloud_sql
+uvx agent-starter-pack enhance --datastore cloud_sql
 
 # Enhance with custom session storage
 uvx agent-starter-pack enhance --session-type cloud_sql
@@ -79,7 +79,7 @@ uvx agent-starter-pack enhance --session-type cloud_sql
 
 ```bash
 # Enhance current project with LangGraph capabilities
-uvx agent-starter-pack enhance . --base-template langgraph_base
+uvx agent-starter-pack enhance . --base-template langgraph
 
 # Enhance with RAG-enabled base template
 uvx agent-starter-pack enhance . --base-template agentic_rag
@@ -150,7 +150,7 @@ The inheritance hierarchy works as follows:
 ```
 Your Existing Project
     ↓ (inherits from)
-Base Template (adk_base, langgraph_base, etc.)
+Base Template (adk, langgraph, etc.)
     ↓ (provides)
 Core Infrastructure & Capabilities
 ```
@@ -175,7 +175,7 @@ uvx agent-starter-pack enhance --deployment-target cloud_run
 **Add Data Pipeline:**
 ```bash
 # Add data ingestion to existing agent
-uvx agent-starter-pack enhance --include-data-ingestion --datastore cloud_sql
+uvx agent-starter-pack enhance --datastore cloud_sql
 ```
 
 **Upgrade Agent Base:**
@@ -184,15 +184,15 @@ uvx agent-starter-pack enhance --include-data-ingestion --datastore cloud_sql
 uvx agent-starter-pack enhance adk@gemini-fullstack
 
 # Or change base template inheritance
-uvx agent-starter-pack enhance . --base-template langgraph_base
+uvx agent-starter-pack enhance . --base-template langgraph
 ```
 
 ## Automatic Backup
 
 The `enhance` command automatically creates a complete backup of your project before making any changes:
 
-- **Location:** `.backup_[dirname]_[timestamp]` in the parent directory
-- **Contents:** Complete copy of your entire project directory
+- **Location:** `~/.agent-starter-pack/backups/[dirname]_[timestamp]`
+- **Contents:** Complete copy of your project directory (excluding `.git`, `.venv`, `node_modules`, etc.)
 - **Timing:** Created before any template files are applied
 
 ## Best Practices
