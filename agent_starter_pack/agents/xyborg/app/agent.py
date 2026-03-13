@@ -1,5 +1,5 @@
 # ruff: noqa
-from {{cookiecutter.agent_directory}}.config import DEFAULT_MODEL
+from {{cookiecutter.agent_directory}}.settings import DEFAULT_MODEL
 from {{cookiecutter.agent_directory}}.plugins import get_plugins
 from {{cookiecutter.agent_directory}}.prompts import ROOT_AGENT_INSTRUCTION
 
