@@ -16,7 +16,7 @@ The XybOrg factory uses a centralized deployment orchestration system (`factory_
 
 ## Modified Files
 
-### 1. `agent_starter_pack/base_template/Makefile`
+### 1. `agent_starter_pack/base_templates/python/Makefile`
 
 **Location:** Lines 231-297
 **Section:** Backend Deployment Targets
@@ -60,11 +60,11 @@ alias xyborg-agent='uvx --from /Users/democodex/code/xyborg/scripts/factory xybo
 
 | File | Lines Changed | Purpose |
 |------|---------------|---------|
-| `agent_starter_pack/base_template/Makefile` | ~4 lines | Added `commands.override.deploy` conditional (matching existing install/playground pattern) |
+| `agent_starter_pack/base_templates/python/Makefile` | ~4 lines | Added `commands.override.deploy` conditional (matching existing install/playground pattern) |
 | `pyproject.toml` | 1 line (119) | Rename CLI command to `xyborg-agent` |
 | `~/.zshrc` | 1 line (appended) | Alias to use local modified template |
-| `agents/xyborg_base/` | New template | XybOrg factory agent template |
-| `agents/xyborg_a2a_base/` | New template | XybOrg factory agent with A2A template |
+| `agents/xyborg/` | New template | XybOrg factory agent template |
+| `agents/xyborg_a2a/` | New template | XybOrg factory agent with A2A template |
 
 #### Changes Made (Makefile)
 
@@ -172,7 +172,7 @@ make deploy     # Should run full deployment pipeline
 
 Two custom templates auto-discovered by `xyborg-agent create`:
 
-### `xyborg_base` — Standard XybOrg Agent
+### `xyborg` — Standard XybOrg Agent
 
 Production-ready agent with secrets, plugins, sessions, and background tasks.
 
@@ -189,9 +189,9 @@ Production-ready agent with secrets, plugins, sessions, and background tasks.
 
 Plus `agent_engine_app.py`, `app_utils/deploy.py`, `app_utils/telemetry.py` from deployment overlay.
 
-### `xyborg_a2a_base` — XybOrg Agent with A2A Protocol
+### `xyborg_a2a` — XybOrg Agent with A2A Protocol
 
-Same as `xyborg_base` plus A2A SDK dependencies (`a2a-sdk`, `nest-asyncio`). A2A protocol handling is in the deployment overlay's `agent_engine_app.py`.
+Same as `xyborg` plus A2A SDK dependencies (`a2a-sdk`, `nest-asyncio`). A2A protocol handling is in the deployment overlay's `agent_engine_app.py`.
 
 ### Customization After Creation
 
@@ -224,7 +224,7 @@ Templates inject targets via `templateconfig.yaml` using two mechanisms:
 | `make clean` | `extra` | Remove caches, staging dir, exported requirements |
 | `make export-requirements` | `extra` | Export deps to `.requirements.txt` without deploying |
 
-These targets are only available to agents created from `xyborg_base` / `xyborg_a2a_base` templates.
+These targets are only available to agents created from `xyborg` / `xyborg_a2a` templates.
 
 ---
 
@@ -246,7 +246,7 @@ Potential improvements to consider:
 If you pull upstream changes from agent-starter-pack:
 
 1. Check if `base_template/Makefile` has conflicts in the deploy target's `commands.override.deploy` conditional
-2. Custom templates in `agents/xyborg_base/` and `agents/xyborg_a2a_base/` are safe — upstream doesn't touch them
+2. Custom templates in `agents/xyborg/` and `agents/xyborg_a2a/` are safe — upstream doesn't touch them
 3. Update this document if new deployment features are added
 
 ### Adding New Factory Targets
@@ -426,10 +426,10 @@ This ensures you're always using your locally modified template with factory dep
 
 **Last Updated:** 2026-03-12
 **Modified Files:** 3 (core) + 2 custom templates
-- `agent_starter_pack/base_template/Makefile` (~67 lines - inverted conditional logic)
+- `agent_starter_pack/base_templates/python/Makefile` (~67 lines - inverted conditional logic)
 - `pyproject.toml` (line 119 - CLI entry point renamed to `xyborg-agent`)
 - `~/.zshrc` (1 line - alias added for easy command access)
-- `agent_starter_pack/agents/xyborg_base/` (custom template - standard XybOrg agent)
-- `agent_starter_pack/agents/xyborg_a2a_base/` (custom template - XybOrg agent with A2A)
+- `agent_starter_pack/agents/xyborg/` (custom template - standard XybOrg agent)
+- `agent_starter_pack/agents/xyborg_a2a/` (custom template - XybOrg agent with A2A)
 
 **Breaking Changes:** None (100% backward compatible)

@@ -41,12 +41,7 @@ install:
 # Playground Targets
 # ==============================================================================
 
-# Run agent locally via adk (with project root in PYTHONPATH for config.secrets)
-run:
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run adk run {{cookiecutter.agent_directory}}
-
-# Launch local dev playground (with project root in PYTHONPATH for config.secrets)
+# Launch local dev playground
 playground:{%- if cookiecutter.is_adk_live %} build-frontend-if-needed{%- endif %}
 {%- if cookiecutter.settings.get("commands", {}).get("override", {}).get("playground") %}
 {%- if cookiecutter.settings.get("commands", {}).get("override", {}).get("playground") is mapping %}
@@ -74,8 +69,7 @@ playground:{%- if cookiecutter.is_adk_live %} build-frontend-if-needed{%- endif 
 	uv run uvicorn {{cookiecutter.agent_directory}}.fast_api_app:app --host localhost --port 8000 --reload
 {%- endif %}
 {%- elif cookiecutter.is_adk %}
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run adk web . --port 8501 --reload_agents
+	uv run adk web . --port 8501 --reload_agents
 {%- elif cookiecutter.is_a2a %}
 {%- if cookiecutter.deployment_target in ('cloud_run', 'gke') %}
 	uv run uvicorn {{cookiecutter.agent_directory}}.fast_api_app:app --host localhost --port 8000 --reload &
@@ -88,8 +82,7 @@ playground:{%- if cookiecutter.is_adk_live %} build-frontend-if-needed{%- endif 
 	@echo "ℹ️  Note: Local playground uses ADK web interface (not A2A endpoints)."
 	@echo "    To test A2A protocol, deploy first with 'make deploy' then use 'make inspector'."
 	@echo ""
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run adk web . --port 8501 --reload_agents
+	uv run adk web . --port 8501 --reload_agents
 {%- endif %}
 {%- endif %}
 {%- else %}
@@ -414,12 +407,14 @@ setup-dev-env:
 # ==============================================================================
 {%- if not extracted|default(false) %}
 
-# Run unit and integration tests (with project root in PYTHONPATH for config.secrets)
+# Run unit and integration tests
 test:
 	uv sync --dev
-	@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo "../..") && \
-	PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run pytest tests/unit && \
-	PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run pytest tests/integration
+{%- if cookiecutter.settings.get("commands", {}).get("override", {}).get("test") %}
+	{{cookiecutter.settings.get("commands", {}).get("override", {}).get("test")}}
+{%- else %}
+	uv run pytest tests/unit && uv run pytest tests/integration
+{%- endif %}
 {%- endif %}
 {%- if cookiecutter.is_adk and not cookiecutter.is_adk_live %}
 

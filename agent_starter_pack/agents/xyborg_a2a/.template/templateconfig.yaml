@@ -10,7 +10,12 @@ settings:
   commands:
     override:
       deploy: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli deploy {{cookiecutter.project_name}} {{cookiecutter.agent_directory}} --yes"
+      playground: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run adk web . --port 8501 --reload_agents"
+      test: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run pytest tests/unit && PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run pytest tests/integration"
     extra:
+      run:
+        description: "Run agent locally via adk"
+        command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && PYTHONPATH=$$PROJECT_ROOT:$$PYTHONPATH uv run adk run {{cookiecutter.agent_directory}}"
       analyze:
         description: "Analyze dependencies (internal common/config + external PyPI packages)"
         command: "@PROJECT_ROOT=$$(git rev-parse --show-toplevel 2>/dev/null || echo \"../..\") && cd $$PROJECT_ROOT && uv run python -m scripts.deployment.cli analyze {{cookiecutter.project_name}} {{cookiecutter.agent_directory}}"
