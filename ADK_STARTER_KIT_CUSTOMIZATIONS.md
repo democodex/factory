@@ -81,7 +81,7 @@ agents/xyborg/
     ├── settings.py             # config.secrets loader + DEFAULT_MODEL
     ├── plugins.py              # EventPlugin + SlackNotificationPlugin (env-configurable)
     ├── prompts.py              # ROOT_AGENT_INSTRUCTION template
-    ├── tools/__init__.py       # Scaffold for domain tools
+    ├── tools.py                # Domain tools (flat file)
     └── sub_agents/__init__.py  # Scaffold for sub-agents
 ```
 
@@ -106,7 +106,7 @@ Identical `app/` files as `xyborg`. Differences are in `templateconfig.yaml`:
 | What | How |
 |------|-----|
 | Agent instructions | Edit `prompts.py` |
-| Add domain tools | Add to `tools/`, import in `agent.py` tools list |
+| Add domain tools | Add to `tools.py`, import in `agent.py` tools list |
 | Add sub-agents | Add to `sub_agents/`, wire in `agent.py` |
 | Slack channels | Set `SLACK_SUCCESS_CHANNEL` / `SLACK_ERROR_CHANNEL` env vars |
 | Disable Slack | Set `ENABLE_SLACK_PLUGIN=false` |
