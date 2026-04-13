@@ -5,12 +5,13 @@ from google.adk.agents import Agent
 from google.adk.apps import App
 from google.adk.models import Gemini
 
+import {{cookiecutter.agent_directory}}.settings  # noqa: F401  — loads .env + Secret Manager secrets
 from {{cookiecutter.agent_directory}}.bootstrap import bootstrap
 from {{cookiecutter.agent_directory}}.prompts import ROOT_AGENT_INSTRUCTION
 
 from common.tools.tasks import get_task_status, list_active_tasks, call_remote_agent
 
-plugins, before_agent, before_model = bootstrap()
+plugins, before_agent, before_model, session_service_builder = bootstrap()
 
 LIVE_MODEL = os.environ.get("LIVE_MODEL", "gemini-live-2.5-flash-native-audio")
 

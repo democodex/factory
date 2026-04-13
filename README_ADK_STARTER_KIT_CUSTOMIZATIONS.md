@@ -18,6 +18,26 @@ Three core files have minimal modifications (detailed below). Everything else is
 
 These are the only upstream files we've changed. Each diff is small and isolated.
 
+> **Why these can't move to custom templates:**
+>
+> 1. **Makefile hooks** — The `commands.override.deploy` and `commands.override.test`
+>    Jinja conditionals must live in the base Makefile because that's where the
+>    `deploy:` and `test:` Make targets are defined. Template overlays run *after*
+>    cookiecutter rendering — they can't inject Jinja logic into already-rendered
+>    files. Without these hooks, the `commands.override` values in
+>    `templateconfig.yaml` are silently ignored.
+>
+> 2. **pyproject.toml** — XybOrg agents live in a monorepo and import `common.*`
+>    and `config.*` from two directories up. The `pythonpath` change is needed
+>    for every generated project's tests to resolve these imports. Shipping a
+>    full `pyproject.toml` override in each custom template would be far heavier
+>    than this 2-line diff, and would break whenever upstream adds new
+>    cookiecutter variables to the base template.
+>
+> 3. **Root pyproject.toml** — CLI entrypoint name. Purely cosmetic.
+>
+> All three produce trivial merge conflicts on upstream sync.
+
 ### 1. `agent_starter_pack/base_templates/python/Makefile` (+9 lines)
 
 Added `commands.override` hooks for `deploy` and `test` targets, matching the existing `install` and `playground` override patterns already in upstream:
@@ -90,6 +110,95 @@ agents/xyborg/
 Identical `app/` files as `xyborg`. Differences are in `templateconfig.yaml`:
 - Extra dependencies: `a2a-sdk~=0.3.9`, `nest-asyncio>=1.6.0,<2.0.0`
 - Tags: `["adk", "a2a"]` (triggers A2A code paths in `agent_engine_app.py` deployment overlay)
+
+### `agents/xyborg_live/` — XybOrg Live Voice Agent
+
+Production-ready live voice/video agent with session persistence across WebSocket
+reconnections. Extends `adk_live` with the full XybOrg infrastructure stack.
+
+```
+agents/xyborg_live/
+├── .template/
+│   └── templateconfig.yaml
+└── app/
+    ├── __init__.py
+    ├── agent.py                # Composition — unpacks 4-tuple from bootstrap
+    ├── agent_engine_app.py     # OVERRIDES deployment template — session persistence
+    ├── app_utils/
+    │   └── expose_app.py       # OVERRIDES deployment template — session_id threading
+    ├── bootstrap.py            # Infrastructure wiring + session service builder
+    ├── settings.py             # config.secrets loader
+    ├── plugins.py              # EventPlugin + SlackNotificationPlugin
+    ├── prompts.py              # ROOT_AGENT_INSTRUCTION with voice mode rules
+    ├── tools.py                # Shared task tools
+    └── sub_agents/__init__.py
+```
+
+#### Deployment Template Overrides
+
+The `xyborg_live` template overrides two files from the shared deployment target
+(`deployment_targets/agent_engine/`). These overrides add session persistence
+without modifying core library files.
+
+**`agent_engine_app.py` override:**
+
+The shared template monkey-patches `PreviewAdkApp.bidi_stream_query` onto
+`AgentEngineApp`, which creates ephemeral sessions lost on WebSocket disconnect.
+Our override replaces this with a proper method that:
+
+1. Reads `session_id` from the first request (sent by frontend on reconnect)
+2. Resumes the session from `DatabaseSessionService` if the ID is valid
+3. Gracefully falls back to a new session if the ID is expired/invalid
+4. Yields a synthetic `{"sessionInfo": {"session_id": "..."}}` event before
+   delegating to the parent, so the WebSocket adapter can populate `setupComplete`
+5. Bridges the original request queue to a resolved queue via an asyncio task,
+   preventing frame drops during the database round-trip
+6. Wires `session_service_builder` from bootstrap (via agent.py import chain)
+
+**`expose_app.py` override:**
+
+Adds session_id threading through the WebSocket adapter:
+
+1. Extracts `session_id` from the frontend's setup message on reconnect
+2. Injects `session_id` into the first data message for `bidi_stream_query`
+3. Intercepts the synthetic `sessionInfo` event (consumed, not forwarded)
+4. Sends `setupComplete` with `session_id` so the frontend can store it
+
+**Neither override contains domain-specific code.** Both are pure infrastructure
+and work for any live agent. They're scoped to `xyborg_live` rather than the
+shared template to avoid affecting Google's vanilla `adk_live` agents.
+
+#### Session Persistence Architecture
+
+```
+Frontend (multimodal-live-client.ts)
+  ↓ setup {user_id, run_id, session_id?}
+WebSocket Adapter (expose_app.py)
+  ↓ first data msg with session_id injected
+AgentEngineApp.bidi_stream_query (agent_engine_app.py)
+  ↓ resolves session: resume or create new
+  ↑ yields {"sessionInfo": {"session_id": "..."}}
+WebSocket Adapter
+  ↑ intercepts sessionInfo → sends {"setupComplete": {"session_id": "..."}}
+Frontend
+  ↑ stores sessionId for next reconnect
+```
+
+**Session service selection** (in `bootstrap.py`):
+- `SESSION_DB_URL` set → `DatabaseSessionService` (Cloud SQL via asyncpg)
+- `SESSION_DB_URL` unset → `InMemorySessionService` (ephemeral)
+
+The `SESSION_DB_URL` secret is loaded from Google Secret Manager via
+`config.secrets` (imported in `settings.py`).
+
+#### Frontend Changes (xyborg_live_react)
+
+`multimodal-live-client.ts` adds:
+- `private sessionId: string | null` — persists across disconnect/reconnect
+- Captures `session_id` from `setupComplete` response
+- Includes `session_id` in setup message when reconnecting
+- Audio/video streams are gated behind `setupComplete` via the `connected`
+  state in `use-live-api.ts` — no race condition with session resolution
 
 ### Template File Details
 
@@ -279,7 +388,9 @@ Templates without `commands.override.deploy` get standard deployment unchanged.
 | `pyproject.toml` | Modified | 1 (CLI rename) |
 | `agents/xyborg/` | Added | 9 files (template) |
 | `agents/xyborg_a2a/` | Added | 9 files (template) |
+| `agents/xyborg_live/` | Added | 12 files (template + deployment overrides) |
+| `frontends/xyborg_live_react/` | Modified | multimodal-live-client.ts (+session_id support) |
 | `resources/locks/uv-xyborg-agent_engine.lock` | Added | Generated |
 | `resources/locks/uv-xyborg_a2a-agent_engine.lock` | Added | Generated |
 
-**Last Updated:** 2026-03-13
+**Last Updated:** 2026-04-13

@@ -78,6 +78,7 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
   public url: string = "";
   private runId: string;
   private userId?: string;
+  private sessionId: string | null = null;
   private firstContentSent: boolean = false;
   private audioChunksSent: number = 0;
   private lastAudioSendTime: number = 0;
@@ -97,6 +98,10 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
 
   get currentRunId(): string {
     return this.runId;
+  }
+
+  get currentSessionId(): string | null {
+    return this.sessionId;
   }
 
   log(type: string, message: StreamingLog["message"]) {
@@ -130,8 +135,14 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
           
           // Handle different message types from backend
           if (jsonData.setupComplete) {
+            // Capture session_id from backend for session resumption on reconnect.
+            // If the backend created a new session (expired/invalid ID), this
+            // updates our local reference to the correct one.
+            if (jsonData.setupComplete.session_id) {
+              this.sessionId = jsonData.setupComplete.session_id;
+            }
             this.emit("setupcomplete");
-            this.log("server.setupComplete", "Session ready");
+            this.log("server.setupComplete", `Session ready (session_id: ${this.sessionId || 'new'})`);
           } else if (jsonData.serverContent) {
             // Handle serverContent messages
             this.receive(new Blob([JSON.stringify(jsonData)], {type: 'application/json'}));
@@ -169,13 +180,20 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
         this.emit("open");
 
         this.ws = ws;
-        // Send initial setup message with user_id for backend
+        // Send initial setup message with user_id for backend.
+        // Include session_id if resuming a prior session — this is how
+        // the backend knows to resume the persistent ADK session rather
+        // than creating a new one.
+        const setupPayload: Record<string, string> = {
+          run_id: this.runId,
+          user_id: this.userId || "default_user",
+        };
+        if (this.sessionId) {
+          setupPayload.session_id = this.sessionId;
+        }
         const setupMessage = {
           user_id: this.userId || "default_user",
-          setup: {
-            run_id: this.runId,
-            user_id: this.userId || "default_user",
-          },
+          setup: setupPayload,
         };
         this._sendDirect(setupMessage);
         ws.removeEventListener("error", onError);
