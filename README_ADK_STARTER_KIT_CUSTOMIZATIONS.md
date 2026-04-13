@@ -150,19 +150,28 @@ Our override replaces this with a proper method that:
 2. Resumes the session from `DatabaseSessionService` if the ID is valid
 3. Gracefully falls back to a new session if the ID is expired/invalid
 4. Yields a synthetic `{"sessionInfo": {"session_id": "..."}}` event before
-   delegating to the parent, so the WebSocket adapter can populate `setupComplete`
+   delegating to the parent, so the adapter can send `sessionReady`
 5. Bridges the original request queue to a resolved queue via an asyncio task,
    preventing frame drops during the database round-trip
 6. Wires `session_service_builder` from bootstrap (via agent.py import chain)
 
 **`expose_app.py` override:**
 
-Adds session_id threading through the WebSocket adapter:
+Implements a two-phase WebSocket handshake that decouples transport readiness
+from application-layer session resolution:
 
-1. Extracts `session_id` from the frontend's setup message on reconnect
-2. Injects `session_id` into the first data message for `bidi_stream_query`
-3. Intercepts the synthetic `sessionInfo` event (consumed, not forwarded)
-4. Sends `setupComplete` with `session_id` so the frontend can store it
+1. Sends `setupComplete` immediately (Phase 1: transport ready) — unblocks
+   the frontend to begin streaming audio/video
+2. Extracts `session_id` from the frontend's setup message on reconnect
+3. Injects `session_id` into the first data message for `bidi_stream_query`
+4. Intercepts the synthetic `sessionInfo` event from `bidi_stream_query`
+5. Sends `sessionReady` with `session_id` (Phase 2: application ready) —
+   frontend silently updates its stored ID for future reconnects
+
+**Why two phases:** Sending `setupComplete` only after session resolution
+creates a deadlock — `bidi_stream_query` waits for user data, but the
+frontend won't stream until `setupComplete` arrives. The two-phase pattern
+breaks this circular dependency.
 
 **Neither override contains domain-specific code.** Both are pure infrastructure
 and work for any live agent. They're scoped to `xyborg_live` rather than the
@@ -172,16 +181,22 @@ shared template to avoid affecting Google's vanilla `adk_live` agents.
 
 ```
 Frontend (multimodal-live-client.ts)
-  ↓ setup {user_id, run_id, session_id?}
+  ↓ connect()
 WebSocket Adapter (expose_app.py)
-  ↓ first data msg with session_id injected
-AgentEngineApp.bidi_stream_query (agent_engine_app.py)
+  ↑ {"setupComplete": {}}                    ← Phase 1: transport ready
+Frontend
+  ↑ sets connected=true, starts audio/video
+  ↓ setup {user_id, run_id, session_id?}
+  ↓ first audio frame
+WebSocket Adapter
+  ↓ injects session_id into first data msg
+AgentEngineApp.bidi_stream_query
   ↓ resolves session: resume or create new
   ↑ yields {"sessionInfo": {"session_id": "..."}}
 WebSocket Adapter
-  ↑ intercepts sessionInfo → sends {"setupComplete": {"session_id": "..."}}
+  ↑ {"sessionReady": {"session_id": "..."}}   ← Phase 2: application ready
 Frontend
-  ↑ stores sessionId for next reconnect
+  ↑ silently stores sessionId for reconnect
 ```
 
 **Session service selection** (in `bootstrap.py`):
@@ -195,7 +210,9 @@ The `SESSION_DB_URL` secret is loaded from Google Secret Manager via
 
 `multimodal-live-client.ts` adds:
 - `private sessionId: string | null` — persists across disconnect/reconnect
-- Captures `session_id` from `setupComplete` response
+- `setupComplete` handler: emits `setupcomplete` event (transport ready)
+- `sessionReady` handler: silently updates `sessionId` (application ready,
+  plain class property — no React re-render cascade)
 - Includes `session_id` in setup message when reconnecting
 - Audio/video streams are gated behind `setupComplete` via the `connected`
   state in `use-live-api.ts` — no race condition with session resolution
@@ -205,7 +222,7 @@ The `SESSION_DB_URL` secret is loaded from Google Secret Manager via
 | File | Purpose |
 |------|---------|
 | `agent.py` | Imports `bootstrap()` for infrastructure, composes `Agent` + `App`. Tools: `get_task_status`, `list_active_tasks`, `call_remote_agent` |
-| `bootstrap.py` | Calls `get_plugins()`, initializes `get_background_task_service()`, returns `(plugins, before_agent_callback, before_model_callback)` |
+| `bootstrap.py` | Calls `get_plugins()`, initializes `get_background_task_service()`, returns `(plugins, before_agent, before_model, session_service_builder)` |
 | `settings.py` | Imports `config.secrets` (auto-loads `.env` + Google Secret Manager), exports `DEFAULT_MODEL` with env fallback |
 | `plugins.py` | `CloudLoggingEventStreamingPlugin` + optional `SlackNotificationPlugin`. Configurable via env vars |
 | `prompts.py` | `ROOT_AGENT_INSTRUCTION` — placeholder for domain-specific instructions |

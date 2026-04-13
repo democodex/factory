@@ -315,7 +315,7 @@ printf '1\nus-central1\n' | uv run xyborg-agent create /tmp/test-xyborg-a2a --ag
 grep 'bootstrap' /tmp/test-xyborg-live/*/agent.py
 grep 'session_service_builder' /tmp/test-xyborg-live/*/agent.py
 grep 'bidi_stream_query' /tmp/test-xyborg-live/*/agent_engine_app.py
-grep 'sessionInfo' /tmp/test-xyborg-live/*/app_utils/expose_app.py
+grep 'sessionReady' /tmp/test-xyborg-live/*/app_utils/expose_app.py
 
 # 4. Cleanup
 rm -rf /tmp/test-xyborg /tmp/test-xyborg-live /tmp/test-xyborg-a2a

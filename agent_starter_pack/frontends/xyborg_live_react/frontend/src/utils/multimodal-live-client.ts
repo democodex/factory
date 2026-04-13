@@ -135,14 +135,17 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
           
           // Handle different message types from backend
           if (jsonData.setupComplete) {
-            // Capture session_id from backend for session resumption on reconnect.
-            // If the backend created a new session (expired/invalid ID), this
-            // updates our local reference to the correct one.
-            if (jsonData.setupComplete.session_id) {
-              this.sessionId = jsonData.setupComplete.session_id;
-            }
+            // Phase 1 (transport ready): pipe is open, start streaming
             this.emit("setupcomplete");
-            this.log("server.setupComplete", `Session ready (session_id: ${this.sessionId || 'new'})`);
+            this.log("server.setupComplete", "Transport ready");
+          } else if (jsonData.sessionReady) {
+            // Phase 2 (application ready): database session resolved.
+            // Silently update the stored session_id for future reconnects.
+            // This is a plain class property — no React re-render cascade.
+            if (jsonData.sessionReady.session_id) {
+              this.sessionId = jsonData.sessionReady.session_id;
+            }
+            this.log("server.sessionReady", `Session ID: ${this.sessionId}`);
           } else if (jsonData.serverContent) {
             // Handle serverContent messages
             this.receive(new Blob([JSON.stringify(jsonData)], {type: 'application/json'}));

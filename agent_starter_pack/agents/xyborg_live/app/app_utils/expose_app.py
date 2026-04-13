@@ -167,26 +167,32 @@ class WebSocketToQueueAdapter:
         try:
             if self.agent_engine is not None:
                 # Local agent engine mode
-                # Give the agent engine a moment to initialize before sending setupComplete
+                # Two-phase handshake:
+                #   Phase 1 (transport ready): setupComplete sent immediately
+                #     so the frontend can transition to connected and begin
+                #     streaming audio/video. Session_id is empty at this point.
+                #   Phase 2 (application ready): sessionReady sent once
+                #     bidi_stream_query resolves the database session. The
+                #     frontend silently updates its stored session_id.
                 await asyncio.sleep(1)
+                await self.websocket.send_json({"setupComplete": {}})
 
                 async for response in self.agent_engine.bidi_stream_query(
                     self.input_queue
                 ):
                     # Intercept the synthetic sessionInfo event from our
-                    # AgentEngineApp.bidi_stream_query override. This carries
-                    # the resolved session_id (new or resumed) and must be
-                    # consumed here — not forwarded to the frontend.
+                    # bidi_stream_query override. Convert it to a sessionReady
+                    # message for the frontend — consumed here, not forwarded
+                    # as agent output.
                     if isinstance(response, dict) and "sessionInfo" in response:
                         self.session_id = response["sessionInfo"].get("session_id")
                         logging.info(f"Session resolved: {self.session_id}")
-                        setup_complete_response: dict = {
-                            "setupComplete": {
-                                "session_id": self.session_id or "",
+                        await self.websocket.send_json({
+                            "sessionReady": {
+                                "session_id": self.session_id,
                             }
-                        }
-                        await self.websocket.send_json(setup_complete_response)
-                        continue  # consumed — don't forward to frontend
+                        })
+                        continue
 
                     # Send responses from agent engine to the websocket client
                     if response is not None:

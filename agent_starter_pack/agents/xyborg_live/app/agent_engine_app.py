@@ -158,7 +158,7 @@ class AgentEngineApp(AdkApp):
                 pass
 
 
-gemini_location = os.environ.get("GOOGLE_CLOUD_LOCATION")
+gemini_location = os.environ.get("GEMINI_LOCATION")
 logs_bucket_name = os.environ.get("LOGS_BUCKET_NAME")
 agent_engine = AgentEngineApp(
     app=adk_app,
