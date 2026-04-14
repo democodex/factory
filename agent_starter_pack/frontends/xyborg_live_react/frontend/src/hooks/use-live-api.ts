@@ -82,8 +82,12 @@ export function useLiveAPI({
 
     const stopAudioStreamer = () => audioStreamerRef.current?.stop();
 
-    const onAudio = (data: ArrayBuffer) =>
+    // When in text mode on native audio model, suppress audio playback.
+    // The backend still streams audio but we drop it client-side.
+    const onAudio = (data: ArrayBuffer) => {
+      if (client.isTextMode) return;
       audioStreamerRef.current?.addPCM16(new Uint8Array(data));
+    };
 
     client
       .on("close", onClose)

@@ -13,6 +13,14 @@ from common.tools.tasks import get_task_status, list_active_tasks, call_remote_a
 
 plugins, before_agent, before_model, session_service_builder = bootstrap()
 
+# Model options for live voice agents:
+# As of 2026-04-13:
+#   gemini-live-2.5-flash-native-audio (default) — native audio, best voice quality.
+#     Mode switching uses "frontend illusion" (mute audio, show text).
+#   gemini-live-2.5-flash — half-cascade TTS, true response_modalities switching.
+#     NOT YET AVAILABLE on Vertex AI Live API. Set LIVE_MODEL in .env when enabled.
+#     Code auto-detects and uses real backend switch vs frontend illusion.
+#   Note: gemini-2.5-flash (no -live-) does NOT support the Live API.
 LIVE_MODEL = os.environ.get("LIVE_MODEL", "gemini-live-2.5-flash-native-audio")
 
 root_agent = Agent(

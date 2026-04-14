@@ -65,6 +65,41 @@ app.state.config = {
 }
 
 
+def _extract_tool_announcements(agent_engine: Any) -> dict[str, str]:
+    """Build tool-name → first-line-docstring map from the agent's tools.
+
+    Walks the agent engine's tool registry to extract human-readable
+    descriptions for deterministic tool call announcements in voice mode.
+    Works with any ADK agent — no agent-specific imports needed.
+
+    The resulting map is used by _guard_tool_voice_race to inject synthetic
+    transcript messages so the user sees what action is being performed,
+    even when the model doesn't verbalize it.
+    """
+    announcements: dict[str, str] = {}
+    try:
+        app = agent_engine._tmpl_attrs.get("app")
+        if not app:
+            return announcements
+        tools = getattr(app.root_agent, "tools", [])
+        for tool in tools:
+            # Raw callables (most common pattern)
+            if callable(tool) and hasattr(tool, "__name__") and hasattr(tool, "__doc__"):
+                name = tool.__name__
+                doc = (tool.__doc__ or "").split("\n")[0].strip()
+                if doc:
+                    announcements[name] = doc
+            # BaseTool instances (e.g., AgentTool wrapping sub-agents)
+            elif hasattr(tool, "name"):
+                name = tool.name
+                doc = getattr(tool, "description", "") or ""
+                if doc:
+                    announcements[name] = doc.split("\n")[0].strip()
+    except Exception:
+        logging.warning("[guard] Could not extract tool announcements", exc_info=True)
+    return announcements
+
+
 class WebSocketToQueueAdapter:
     """Adapter to convert WebSocket messages to an asyncio Queue for the agent engine."""
 
@@ -87,6 +122,11 @@ class WebSocketToQueueAdapter:
         self.input_queue: asyncio.Queue[dict] = asyncio.Queue()
         self.first_message = True
         self.session_id: str | None = None
+        # Build tool announcement map for voice-tool race guard.
+        # Extracts first-line docstrings from the agent's registered tools.
+        self._tool_announcements = (
+            _extract_tool_announcements(agent_engine) if agent_engine else {}
+        )
 
     def _transform_remote_agent_engine_response(self, response: dict) -> dict:
         """Transform remote Agent Engine bidiStreamOutput to ADK Event format for frontend."""
@@ -99,6 +139,64 @@ class WebSocketToQueueAdapter:
         # Transform to ADK Event format that frontend already handles
         # Just unwrap the bidiStreamOutput wrapper - the content is already in ADK Event format
         return bidi_output
+
+    # Tool-specific signals emitted in addition to the generic guard.
+    # Tools not listed here still pass through the guard.
+    _TOOL_SIGNALS: dict[str, dict] = {  # noqa: RUF012
+        "switch_to_text_mode": {"modeSwitch": {"modality": "TEXT"}},
+        "switch_to_voice_mode": {"modeSwitch": {"modality": "AUDIO"}},
+    }
+
+    async def _guard_tool_voice_race(self, response: dict) -> None:
+        """Prevent race conditions between tool execution and voice output.
+
+        Scans each ADK event for function_call parts. When a tool call is
+        detected, injects a synthetic transcript announcement (from the
+        tool's docstring) and emits a toolExecution signal to the frontend
+        BEFORE the tool result arrives. The frontend defers side-effects
+        (like mode switching) until turnComplete, ensuring the agent
+        finishes speaking before disruptive actions take effect.
+
+        The transcript announcement is extracted at construction time from
+        the agent's tool registry via _extract_tool_announcements(). This
+        is deterministic — no model compliance needed.
+
+        Tools with entries in _TOOL_SIGNALS also emit their specialized
+        signal (e.g., modeSwitch for mode switching tools).
+        """
+        content = response.get("content", {})
+        parts = content.get("parts", []) if isinstance(content, dict) else []
+        for part in parts:
+            fc = part.get("function_call") if isinstance(part, dict) else None
+            if not fc:
+                continue
+            tool_name = fc.get("name")
+            if not tool_name:
+                continue
+
+            # Inject synthetic transcript announcement from tool docstring
+            announcement = self._tool_announcements.get(tool_name)
+            if announcement:
+                await self.websocket.send_json({
+                    "serverContent": {
+                        "modelTurn": {
+                            "parts": [{"text": f"[{announcement}]\n"}]
+                        }
+                    }
+                })
+
+            # Generic guard signal — every tool call gets this
+            await self.websocket.send_json({
+                "toolExecution": {"name": tool_name}
+            })
+            logging.info(f"[guard] Tool voice race: {tool_name}")
+
+            # Additional specialized signal for specific tools
+            special = self._TOOL_SIGNALS.get(tool_name)
+            if special:
+                await self.websocket.send_json(special)
+
+            return
 
     async def receive_from_client(self) -> None:
         """Listen for messages from the client and put them in the queue."""
@@ -185,11 +283,13 @@ class WebSocketToQueueAdapter:
                     # message for the frontend — consumed here, not forwarded
                     # as agent output.
                     if isinstance(response, dict) and "sessionInfo" in response:
-                        self.session_id = response["sessionInfo"].get("session_id")
+                        info = response["sessionInfo"]
+                        self.session_id = info.get("session_id")
                         logging.info(f"Session resolved: {self.session_id}")
                         await self.websocket.send_json({
                             "sessionReady": {
                                 "session_id": self.session_id,
+                                "supportsResponseModalities": info.get("supportsResponseModalities", False),
                             }
                         })
                         continue
@@ -197,6 +297,13 @@ class WebSocketToQueueAdapter:
                     # Send responses from agent engine to the websocket client
                     if response is not None:
                         await self.websocket.send_json(response)
+
+                        # Guard against tool-voice race conditions. Emits
+                        # toolExecution (+ specialized signals like modeSwitch)
+                        # to the frontend, which defers side-effects until
+                        # turnComplete.
+                        if isinstance(response, dict):
+                            await self._guard_tool_voice_race(response)
 
                         # Check for error responses
                         if isinstance(response, dict) and "error" in response:

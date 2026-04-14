@@ -49,14 +49,15 @@ load_dotenv()
 class AgentEngineApp(AdkApp):
     def set_up(self) -> None:
         """Initialize the agent engine app with logging and telemetry."""
+        # Set location BEFORE vertexai.init() so the SDK picks it up
+        # when configuring the genai client endpoint
+        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", gemini_location or "us-central1")
         vertexai.init()
         setup_telemetry()
         super().set_up()
         logging.basicConfig(level=logging.INFO)
         logging_client = google_cloud_logging.Client()
         self.logger = logging_client.logger(__name__)
-        if gemini_location:
-            os.environ["GOOGLE_CLOUD_LOCATION"] = gemini_location
 
     def register_feedback(self, feedback: dict[str, Any]) -> None:
         """Collect and log feedback."""
@@ -123,8 +124,14 @@ class AgentEngineApp(AdkApp):
                 session_id = session.id
 
         # Yield synthetic event so the adapter can capture session_id
-        # before any agent output arrives
-        yield {"sessionInfo": {"session_id": session_id}}
+        # and model capabilities before any agent output arrives
+        live_model = os.environ.get("LIVE_MODEL", "gemini-live-2.5-flash-native-audio")
+        yield {
+            "sessionInfo": {
+                "session_id": session_id,
+                "supportsResponseModalities": "native-audio" not in live_model,
+            }
+        }
 
         # Reconstruct the request queue with session_id resolved
         resolved_queue: asyncio.Queue[dict] = asyncio.Queue()

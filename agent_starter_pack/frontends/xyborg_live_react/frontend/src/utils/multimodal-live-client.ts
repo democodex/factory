@@ -55,6 +55,8 @@ interface MultimodalLiveClientEventTypes {
   turncomplete: () => void;
   toolcall: (toolCall: ToolCall) => void;
   toolcallcancellation: (toolcallCancellation: ToolCallCancellation) => void;
+  toolexecution: (data: { name: string }) => void;
+  sessionready: () => void;
   // ADK events
   inputtranscription: (text: string) => void;
   outputtranscription: (text: string) => void;
@@ -79,6 +81,10 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
   private runId: string;
   private userId?: string;
   private sessionId: string | null = null;
+  private responseModality: "AUDIO" | "TEXT" = "AUDIO";
+  private pendingModeSwitch: "AUDIO" | "TEXT" | null = null;
+  private pendingToolName: string | null = null;
+  private supportsResponseModalities: boolean = false;
   private firstContentSent: boolean = false;
   private audioChunksSent: number = 0;
   private lastAudioSendTime: number = 0;
@@ -102,6 +108,47 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
 
   get currentSessionId(): string | null {
     return this.sessionId;
+  }
+
+  get currentResponseModality(): "AUDIO" | "TEXT" {
+    return this.responseModality;
+  }
+
+  /**
+   * Switch output modality. Behavior depends on model capabilities:
+   * - Native audio model: "frontend illusion" — mutes audio playback,
+   *   shows transcription text. No reconnection needed.
+   * - Bidi model (future): true backend switch via response_modalities,
+   *   triggers disconnect/reconnect to apply new LiveConnectConfig.
+   */
+  async switchModality(modality: "AUDIO" | "TEXT") {
+    this.responseModality = modality;
+    this.log("client.modeSwitch", `Switching to ${modality} mode (backend: ${this.supportsResponseModalities})`);
+
+    if (this.supportsResponseModalities) {
+      // True backend switch — reconnect with new response_modalities
+      this.disconnect();
+      await this.connect();
+    }
+    // Native audio: no reconnection — audio suppression handled by use-live-api.ts
+    this.emit("modality" as any, modality);
+  }
+
+  get isTextMode(): boolean {
+    return this.responseModality === "TEXT";
+  }
+
+  /**
+   * Execute a pending mode switch after the agent finishes its turn.
+   * Called from turnComplete handlers to avoid cutting off the agent
+   * mid-sentence when a mode switch tool was called.
+   */
+  private _executePendingModeSwitch() {
+    if (this.pendingModeSwitch) {
+      const modality = this.pendingModeSwitch;
+      this.pendingModeSwitch = null;
+      this.switchModality(modality);
+    }
   }
 
   log(type: string, message: StreamingLog["message"]) {
@@ -140,12 +187,23 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
             this.log("server.setupComplete", "Transport ready");
           } else if (jsonData.sessionReady) {
             // Phase 2 (application ready): database session resolved.
-            // Silently update the stored session_id for future reconnects.
-            // This is a plain class property — no React re-render cascade.
             if (jsonData.sessionReady.session_id) {
               this.sessionId = jsonData.sessionReady.session_id;
             }
-            this.log("server.sessionReady", `Session ID: ${this.sessionId}`);
+            this.supportsResponseModalities = jsonData.sessionReady.supportsResponseModalities ?? false;
+            this.log("server.sessionReady", `Session ID: ${this.sessionId}, responseModalities: ${this.supportsResponseModalities}`);
+            this.emit("sessionready");
+          } else if (jsonData.toolExecution) {
+            // Voice-tool race guard: track active tool for turn coordination
+            this.pendingToolName = jsonData.toolExecution.name;
+            this.log("server.toolExecution", `Tool executing: ${this.pendingToolName}`);
+            this.emit("toolexecution", jsonData.toolExecution);
+          } else if (jsonData.modeSwitch) {
+            // Mode switch signal from backend (triggered by tool call).
+            // Defer the actual disconnect until turnComplete so the agent
+            // finishes speaking before we cut the connection.
+            this.pendingModeSwitch = jsonData.modeSwitch.modality;
+            this.log("server.modeSwitch", `Pending switch to ${this.pendingModeSwitch}`);
           } else if (jsonData.serverContent) {
             // Handle serverContent messages
             this.receive(new Blob([JSON.stringify(jsonData)], {type: 'application/json'}));
@@ -268,7 +326,9 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
       }
       if (isTurnComplete(serverContent)) {
         this.log("server.send", "turnComplete");
+        this.pendingToolName = null;
         this.emit("turncomplete");
+        this._executePendingModeSwitch();
         //plausible there's more to the message, continue
       }
 
@@ -313,12 +373,15 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
       // Handle ADK events
       this.emit("adkevent", response);
 
-      // Handle specific ADK event types
-      if (isInputTranscription(response)) {
+      // Handle specific ADK event types — only emit final (non-partial)
+      // transcriptions. The ADK sends both a partial (incremental chunk) and
+      // a final (accumulated text) event per segment; emitting both causes
+      // every line to appear twice in the UI.
+      if (isInputTranscription(response) && !response.partial) {
         this.emit("inputtranscription", response.input_transcription!.text);
       }
 
-      if (isOutputTranscription(response)) {
+      if (isOutputTranscription(response) && !response.partial) {
         this.emit("outputtranscription", response.output_transcription!.text);
       }
 
@@ -394,6 +457,7 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
       if (response.turn_complete) {
         this.emit("turncomplete");
         this.log("server.turncomplete", "ADK turn complete");
+        this._executePendingModeSwitch();
       }
       
       // Handle interruption
@@ -477,6 +541,7 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
       if (!this.firstContentSent) {
         data = {
           user_id: this.userId || "default_user",
+          ...(this.supportsResponseModalities ? { run_config: { response_modalities: [this.responseModality] } } : {}),
           live_request: data,
         };
         this.firstContentSent = true;
@@ -518,6 +583,7 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
     if (!this.firstContentSent) {
       data = {
         user_id: this.userId || "default_user",
+        ...(this.supportsResponseModalities ? { run_config: { response_modalities: [this.responseModality] } } : {}),
         live_request: data,
       };
       this.firstContentSent = true;
