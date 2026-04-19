@@ -194,9 +194,14 @@ export class MultimodalLiveClient extends EventEmitter<MultimodalLiveClientEvent
             this.log("server.sessionReady", `Session ID: ${this.sessionId}, responseModalities: ${this.supportsResponseModalities}`);
             this.emit("sessionready");
           } else if (jsonData.toolExecution) {
-            // Voice-tool race guard: track active tool for turn coordination
+            // Voice-tool race guard: track active tool for turn coordination.
+            // If the backend includes an announcement (from the tool's docstring),
+            // emit it as an output transcription so it appears in the transcript panel.
             this.pendingToolName = jsonData.toolExecution.name;
             this.log("server.toolExecution", `Tool executing: ${this.pendingToolName}`);
+            if (jsonData.toolExecution.announcement) {
+              this.emit("outputtranscription", jsonData.toolExecution.announcement);
+            }
             this.emit("toolexecution", jsonData.toolExecution);
           } else if (jsonData.modeSwitch) {
             // Mode switch signal from backend (triggered by tool call).

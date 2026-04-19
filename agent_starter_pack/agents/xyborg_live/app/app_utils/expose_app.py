@@ -174,20 +174,15 @@ class WebSocketToQueueAdapter:
             if not tool_name:
                 continue
 
-            # Inject synthetic transcript announcement from tool docstring
-            announcement = self._tool_announcements.get(tool_name)
-            if announcement:
-                await self.websocket.send_json({
-                    "serverContent": {
-                        "modelTurn": {
-                            "parts": [{"text": f"[{announcement}]\n"}]
-                        }
-                    }
-                })
-
-            # Generic guard signal — every tool call gets this
+            # Generic guard signal with announcement from tool docstring.
+            # The frontend renders the announcement in the transcript panel
+            # via the outputtranscription event.
+            announcement = self._tool_announcements.get(tool_name, "")
             await self.websocket.send_json({
-                "toolExecution": {"name": tool_name}
+                "toolExecution": {
+                    "name": tool_name,
+                    "announcement": f"[{announcement}]" if announcement else "",
+                }
             })
             logging.info(f"[guard] Tool voice race: {tool_name}")
 
