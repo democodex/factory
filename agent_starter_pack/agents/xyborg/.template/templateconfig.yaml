@@ -4,7 +4,7 @@ settings:
   requires_data_ingestion: false
   requires_session: true
   deployment_targets: ["agent_engine"]
-  extra_dependencies: ["google-adk>=1.16.0,<2.0.0"]
+  extra_dependencies: ["google-adk>=1.16.0,<2.0.0", "asyncpg>=0.30.0,<1.0.0"]
   tags: ["adk"]
   frontend_type: "None"
   commands:

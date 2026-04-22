@@ -11,6 +11,7 @@ settings:
     - "uvicorn>=0.18.0,<1.0.0"
     - "fastapi>=0.75.0,<1.0.0"
     - "backoff>=2.0.0,<3.0.0"
+    - "asyncpg>=0.30.0,<1.0.0"
   tags: ["adk", "adk_live"]
   commands:
     override:
