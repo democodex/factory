@@ -248,6 +248,13 @@ function SidePanel({
   }, [client, log]);
 
   const handleSubmit = () => {
+    // Mirror typed input into the INPUT transcript panel so the user has
+    // one unified history regardless of modality. Voice reaches the panel
+    // via the server-side `inputtranscription` event from the Live API;
+    // text bypasses that path, so emit the same event locally.
+    if (textInput.trim()) {
+      client.emit("inputtranscription", textInput);
+    }
     client.send([{ text: textInput }]);
 
     setTextInput("");
