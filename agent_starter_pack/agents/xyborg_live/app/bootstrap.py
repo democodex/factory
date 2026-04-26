@@ -5,9 +5,19 @@ from common.utils.task_runner import get_background_task_service
 
 from {{cookiecutter.agent_directory}}.plugins import get_plugins
 
-# Register domain-specific awareness levels (customize per agent):
-# from common.context.awareness import register_awareness_level, AwarenessLevel
-# register_awareness_level("your_task_type", AwarenessLevel.ANNOUNCED)
+# Awareness events for this agent are declared in awareness_events.py as
+# AwarenessEventSpec values. Register them at import time so check_awareness
+# (in before_model_callback) and the renderer find them. Pattern:
+#
+#     from common.context.awareness import register_awareness, validate_awareness_registry
+#     from {{cookiecutter.agent_directory}}.awareness_events import ALL_SPECS
+#
+#     for spec in ALL_SPECS:
+#         register_awareness(spec)
+#
+# Then call validate_awareness_registry(list(ALL_SPECS)) inside bootstrap()
+# to assert every spec the agent depends on is actually registered. See
+# the docstring in awareness_events.py for the full emit pattern.
 
 
 def _init_session(callback_context):
