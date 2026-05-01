@@ -1,21 +1,20 @@
 # {{cookiecutter.agent_directory}}
 
-XybOrg Live voice agent with Gemini Live API, WebSocket backend, and React frontend.
+XybOrg ADK agent scaffold with Agent-to-Agent (A2A) protocol support — exposes the agent for remote invocation by other XybOrg agents.
 
 ## Quick Start
 
 ```bash
-make install       # Install Python + frontend dependencies
-make live          # Start WebSocket backend (port 8000)
-make frontend-dev  # Start frontend dev server (port 3000, separate terminal)
+make install       # Install dependencies
+make run           # Run agent locally via `adk run`
+make playground    # ADK web playground
+make test          # Run unit + integration tests
 ```
 
 ## Development
 
 | Command | Description |
 |---------|-------------|
-| `make live` | Start Live API backend (WebSocket server) |
-| `make frontend-dev` | Start frontend dev server (hot reload) |
 | `make run` | Run agent locally via `adk run` |
 | `make playground` | ADK web playground |
 | `make test` | Run unit + integration tests |
@@ -30,13 +29,15 @@ make frontend-dev  # Start frontend dev server (port 3000, separate terminal)
 | Agent instructions | Edit `app/prompts.py` |
 | Add domain tools | Add to `app/tools.py`, import in `app/agent.py` tools list |
 | Add sub-agents | Add to `app/sub_agents/`, wire in `app/agent.py` |
-| Change live model | Set `LIVE_MODEL` env var (default: `gemini-live-2.5-flash-native-audio`) |
+| Expose for A2A | Configured in `app/agent.py` via the A2A wrapping (default for this template) |
 | Slack channels | Set `SLACK_SUCCESS_CHANNEL` / `SLACK_ERROR_CHANNEL` env vars |
 | Disable Slack | Set `ENABLE_SLACK_PLUGIN=false` |
 
 ## Visibility & Data Safety (views.py)
 
 If your agent surfaces data sourced from `common/entities/` (e.g. `CompanyRecord`) to the LLM via a tool result, you **must** project that data through a visibility tier first. Raw canonical entities carry audit/lineage/internal fields (`date_enriched`, `legitimacy_*`, HubSpot system timestamps) that don't belong in a model's awareness context.
+
+This rule applies to **A2A responses too** — anything returned to a calling agent that may end up in another LLM's context window must go through a tier projection.
 
 ### When you need a `views.py`
 
